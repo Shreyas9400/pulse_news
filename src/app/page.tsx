@@ -9,8 +9,11 @@ import PortfolioOverview from '@/components/PortfolioOverview';
 import NewsCard from '@/components/NewsCard';
 import ReaderModal from '@/components/ReaderModal';
 import PortfolioModal from '@/components/PortfolioModal';
+import NotificationModal from '@/components/NotificationModal';
+import MobileBottomNav from '@/components/MobileBottomNav';
 import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types';
-import { Sparkles, AlertCircle, RefreshCw, VolumeX, Plus, Wallet, ArrowRight } from 'lucide-react';
+import { Sparkles, AlertCircle, RefreshCw, VolumeX, Plus, Wallet, Bell } from 'lucide-react';
+import { listenForFCMForegroundMessages } from '@/lib/firebase';
 
 const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD'];
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
@@ -29,6 +32,7 @@ export default function HomePage() {
   const [savedArticles, setSavedArticles] = useState<NewsArticle[]>([]);
   const [portfolio, setPortfolio] = useState<string[]>(DEFAULT_PORTFOLIO);
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   // Reader Modal state
   const [readerArticle, setReaderArticle] = useState<NewsArticle | null>(null);
@@ -54,6 +58,16 @@ export default function HomePage() {
     } catch {
       // ignore
     }
+
+    // Listen for FCM foreground push notifications
+    const unsubscribeFCM = listenForFCMForegroundMessages((payload) => {
+      console.log('Foreground FCM received:', payload);
+      alert(`[Market Alert] ${payload.notification?.title}: ${payload.notification?.body}`);
+    });
+
+    return () => {
+      if (typeof unsubscribeFCM === 'function') unsubscribeFCM();
+    };
   }, []);
 
   // Fetch Live Stock Quotes from Yahoo Finance API
@@ -194,7 +208,6 @@ export default function HomePage() {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
     
-    // Auto-sync quotes & news immediately for the updated portfolio
     fetchLiveQuotes(updated);
     fetchNews('portfolio', '', null, updated);
   };
@@ -247,22 +260,22 @@ export default function HomePage() {
 
   // Header title generator
   const getChannelHeading = () => {
-    if (activeCategory === 'saved') return 'Saved Articles & Reading List';
-    if (selectedStockFilter) return `Tailored Intelligence Wire: $${selectedStockFilter}`;
-    if (searchQuery) return `Search Results for "${searchQuery}"`;
-    if (activeCategory === 'portfolio') return '💼 Curated News for Your Portfolio (Auto-Synced)';
+    if (activeCategory === 'saved') return 'Saved Reading List';
+    if (selectedStockFilter) return `Intelligence Wire: $${selectedStockFilter}`;
+    if (searchQuery) return `Search Results: "${searchQuery}"`;
+    if (activeCategory === 'portfolio') return '💼 Curated Portfolio Intelligence';
     if (activeCategory === 'industry-chips') return '⚡ Semiconductor & Chip Industry Wire';
     if (activeCategory === 'industry-ai-cloud') return '🧠 AI & Cloud Infrastructure Intelligence';
-    if (activeCategory === 'industry-ev') return '🚗 EV, Clean Energy & Battery Sector';
-    if (activeCategory === 'industry-fintech') return '💳 Fintech, Banking & Macroeconomic Radar';
+    if (activeCategory === 'industry-ev') return '🚗 EV, Clean Energy & Mobility';
+    if (activeCategory === 'industry-fintech') return '💳 Fintech, Banking & Macro Radar';
     if (activeCategory === 'industry-biotech') return '🧬 Biotech, Pharma & Clinical Trials';
     if (activeCategory === 'industry-cyber') return '🛡️ Cybersecurity & Defense Technology';
-    if (activeCategory === 'markets') return '📈 Yahoo Finance & Stock Market Movers';
-    if (activeCategory === 'tech') return '💻 Tech Trends & Silicon Valley';
-    if (activeCategory === 'world') return '🌐 Global Geopolitics & World Headlines';
-    if (activeCategory === 'business') return '🏛️ Business, Trade & Economy';
-    if (activeCategory === 'science') return '🔬 Science, Space & Breakthroughs';
-    return 'Real-Time Top Stories';
+    if (activeCategory === 'markets') return '📈 Financial Markets & Stock Indices';
+    if (activeCategory === 'tech') return '💻 Technology & Silicon Valley';
+    if (activeCategory === 'world') return '🌐 Global Affairs & World News';
+    if (activeCategory === 'business') return '🏛️ Business, Trade & Commerce';
+    if (activeCategory === 'science') return '🔬 Science & Space Breakthroughs';
+    return 'Front Page Top Stories';
   };
 
   return (
@@ -273,7 +286,7 @@ export default function HomePage() {
         onOpenPortfolio={() => setIsPortfolioModalOpen(true)}
       />
 
-      {/* Main Navigation Header */}
+      {/* FT/WSJ Style Masthead Header */}
       <Header
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -286,11 +299,12 @@ export default function HomePage() {
         isRefreshing={isRefreshingNews || isLoadingQuotes}
         savedCount={savedArticles.length}
         onShowSaved={() => handleSelectCategory('saved')}
+        onOpenNotifications={() => setIsNotificationModalOpen(true)}
         activeCategory={activeCategory}
       />
 
-      <main className="container" style={{ flex: 1, paddingTop: 20 }}>
-        {/* Channel Navigation Pills with Industry Sectors */}
+      <main className="container" style={{ flex: 1, paddingTop: 14 }}>
+        {/* Underlined Section Channels */}
         <ChannelFilter
           activeCategory={activeCategory}
           onSelectCategory={handleSelectCategory}
@@ -298,7 +312,7 @@ export default function HomePage() {
           portfolioCount={portfolio.length}
         />
 
-        {/* Executive Portfolio Dashboard Panel (Active on Portfolio tab or All tab) */}
+        {/* Executive Portfolio Dashboard Panel */}
         {(activeCategory === 'portfolio' || activeCategory === 'all') && !searchQuery && (
           <PortfolioOverview
             quotes={userPortfolioQuotes.length > 0 ? userPortfolioQuotes : stockQuotes.filter(q => !DEFAULT_INDICES.includes(q.symbol))}
@@ -311,7 +325,7 @@ export default function HomePage() {
           />
         )}
 
-        {/* AI Morning/Executive Briefing Section (Visible on Top Headlines tab) */}
+        {/* AI Morning Briefing Section */}
         {activeCategory === 'all' && !searchQuery && (
           <BriefingHero
             briefing={briefing}
@@ -321,27 +335,29 @@ export default function HomePage() {
           />
         )}
 
-        {/* Search / Channel Banner */}
+        {/* Section Headline Banner */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            margin: '20px 0 24px 0',
+            margin: '18px 0 20px 0',
             flexWrap: 'wrap',
-            gap: 12,
+            gap: 10,
+            borderBottom: '1px solid var(--border-subtle)',
+            paddingBottom: 10,
           }}
         >
           <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>
+            <h2 style={{ fontSize: '1.45rem', fontFamily: 'var(--font-serif)', fontWeight: 800 }}>
               {getChannelHeading()}
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 2 }}>
               {selectedStockFilter
-                ? `Using Boolean search operators & Yahoo Finance feeds for ${selectedStockFilter}`
+                ? `Boolean query feeds & Yahoo Finance articles for ${selectedStockFilter}`
                 : activeCategory === 'portfolio'
-                ? `Auto-synced across ${portfolio.join(', ')} using company aliases & search operators`
-                : `${displayedArticles.length} stories synced • Real-time live feeds`}
+                ? `Auto-synced across ${portfolio.join(', ')} via Yahoo Finance & Boolean query wires`
+                : `${displayedArticles.length} stories reported • Continuous monitoring`}
             </p>
           </div>
 
@@ -350,12 +366,12 @@ export default function HomePage() {
               <button
                 onClick={() => handleSelectStockFilter('')}
                 style={{
-                  background: 'rgba(6, 182, 212, 0.15)',
-                  border: '1px solid var(--accent-cyan)',
-                  color: '#38bdf8',
-                  padding: '6px 14px',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: '0.8rem',
+                  background: 'rgba(212, 175, 55, 0.15)',
+                  border: '1px solid var(--accent-gold)',
+                  color: 'var(--accent-gold)',
+                  padding: '5px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.78rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                 }}
@@ -374,9 +390,9 @@ export default function HomePage() {
                   background: 'transparent',
                   border: '1px solid var(--border-subtle)',
                   color: 'var(--text-secondary)',
-                  padding: '6px 14px',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: '0.8rem',
+                  padding: '5px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.78rem',
                   cursor: 'pointer',
                 }}
               >
@@ -386,44 +402,22 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Empty State / Loading State */}
+        {/* Empty / Loading State */}
         {isRefreshingNews && displayedArticles.length === 0 ? (
-          <div
-            style={{
-              padding: '60px 20px',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <RefreshCw
-              size={32}
-              style={{
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 16px',
-                color: 'var(--accent-primary)',
-              }}
-            />
-            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Aggregating live news and industry intelligence...</p>
+          <div style={{ padding: '50px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', color: 'var(--accent-gold)' }} />
+            <p style={{ fontSize: '1rem', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>Fetching live intelligence wire...</p>
           </div>
         ) : displayedArticles.length === 0 ? (
-          <div
-            style={{
-              padding: '60px 20px',
-              textAlign: 'center',
-              background: 'var(--bg-card)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)',
-              margin: '20px 0 60px',
-            }}
-          >
-            <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <div style={{ padding: '50px 20px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', margin: '20px 0 60px' }}>
+            <p style={{ fontSize: '1.05rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-secondary)' }}>
               {activeCategory === 'saved'
-                ? 'You have no saved articles yet. Bookmark stories using the bookmark icon to read them anytime.'
-                : 'No recent headlines found for this topic or portfolio.'}
+                ? 'No saved articles yet. Bookmark articles with the bookmark icon to read them anytime.'
+                : 'No recent headlines found for this sector or portfolio.'}
             </p>
           </div>
         ) : (
-          /* News Grid */
+          /* Newspaper Style Editorial Grid */
           <div className="news-grid">
             {displayedArticles.map((article) => (
               <NewsCard
@@ -448,6 +442,12 @@ export default function HomePage() {
         onRemoveSymbol={handleRemoveSymbol}
       />
 
+      {/* Push Notification FCM Settings Modal */}
+      <NotificationModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+      />
+
       {/* Distraction-Free Reader Modal */}
       {readerArticle && (
         <ReaderModal
@@ -460,21 +460,28 @@ export default function HomePage() {
         />
       )}
 
-      {/* Floating Audio Narrator Player when speaking */}
+      {/* Mobile Sticky Bottom Navigation Bar */}
+      <MobileBottomNav
+        activeCategory={activeCategory}
+        onSelectCategory={handleSelectCategory}
+        savedCount={savedArticles.length}
+        onOpenNotifications={() => setIsNotificationModalOpen(true)}
+      />
+
+      {/* Floating Audio Narrator */}
       {isSpeaking && (
         <div className="audio-bar">
           <div
             style={{
-              width: 10,
-              height: 10,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
               background: 'var(--accent-emerald)',
-              boxShadow: '0 0 10px var(--accent-emerald)',
               animation: 'pulse 1.5s infinite',
             }}
           />
-          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
-            Voice Narrator Playing...
+          <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+            Reading Article...
           </span>
           <button
             onClick={stopAudio}
@@ -482,9 +489,9 @@ export default function HomePage() {
               background: 'rgba(244, 63, 94, 0.2)',
               border: '1px solid rgba(244, 63, 94, 0.4)',
               color: '#fb7185',
-              padding: '4px 10px',
-              borderRadius: 20,
-              fontSize: '0.75rem',
+              padding: '3px 8px',
+              borderRadius: 3,
+              fontSize: '0.72rem',
               fontWeight: 700,
               cursor: 'pointer',
               display: 'inline-flex',
@@ -492,39 +499,31 @@ export default function HomePage() {
               gap: 4,
             }}
           >
-            <VolumeX size={13} />
+            <VolumeX size={12} />
             <span>Stop</span>
           </button>
         </div>
       )}
 
-      {/* Footer */}
+      {/* Editorial Footer */}
       <footer
         style={{
           borderTop: '1px solid var(--border-subtle)',
           padding: '24px 0',
-          background: 'rgba(0, 0, 0, 0.2)',
-          textAlign: 'center',
-          fontSize: '0.82rem',
+          background: 'rgba(0, 0, 0, 0.25)',
+          fontSize: '0.8rem',
           color: 'var(--text-muted)',
         }}
       >
         <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <strong>PulseNews</strong> • Real-Time AI News & Portfolio Intelligence Terminal
+          <div style={{ fontFamily: 'var(--font-serif)' }}>
+            <strong>Financial Pulse</strong> • Global Market & Portfolio Intelligence Edition
           </div>
-          <div>
-            Search Operators & Boolean Feed Engine • Deployable to Vercel
+          <div style={{ fontSize: '0.75rem' }}>
+            PWA Enabled • FCM Push Protocol • Yahoo Finance Live Stream
           </div>
         </div>
       </footer>
-
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(1.2); }
-        }
-      `}</style>
     </div>
   );
 }

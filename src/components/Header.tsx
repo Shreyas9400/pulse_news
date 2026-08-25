@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Sun, Moon, Sparkles, RefreshCw, Bookmark, Newspaper } from 'lucide-react';
+import { Search, Sun, Moon, Sparkles, RefreshCw, Bookmark, Bell } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -11,6 +11,7 @@ interface HeaderProps {
   isRefreshing: boolean;
   savedCount: number;
   onShowSaved: () => void;
+  onOpenNotifications: () => void;
   activeCategory: string;
 }
 
@@ -22,30 +23,26 @@ export default function Header({
   isRefreshing,
   savedCount,
   onShowSaved,
+  onOpenNotifications,
   activeCategory,
 }: HeaderProps) {
   const [theme, setTheme] = useState<'dark' | 'light' | 'oled'>('dark');
-  const [currentTime, setCurrentTime] = useState<string>('');
+  const [currentDateStr, setCurrentDateStr] = useState<string>('');
 
   useEffect(() => {
-    // Read saved theme
     const savedTheme = (localStorage.getItem('pulse_theme') as any) || 'dark';
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
 
-    const updateClock = () => {
-      const now = new Date();
-      setCurrentTime(
-        now.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })
-      );
-    };
-    updateClock();
-    const timer = setInterval(updateClock, 1000);
-    return () => clearInterval(timer);
+    const now = new Date();
+    setCurrentDateStr(
+      now.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    );
   }, []);
 
   const cycleTheme = () => {
@@ -56,134 +53,98 @@ export default function Header({
   };
 
   return (
-    <header className="header-glass">
-      <div className="container header-content">
-        {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <a href="/" className="brand-logo">
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 10,
-                background: 'linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
-              }}
-            >
-              <Newspaper size={20} color="#fff" />
-            </div>
-            <span>PULSE<span style={{ color: 'var(--accent-cyan)' }}>NEWS</span></span>
-          </a>
-          <span className="brand-badge">AI Briefing</span>
-        </div>
-
-        {/* Search */}
-        <form onSubmit={onSearchSubmit} className="search-wrapper">
-          <Search size={17} className="search-icon" />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search keywords, companies, tickers (e.g. NVDA, AI, SpaceX)..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-        </form>
-
-        {/* Actions & Utilities */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Live Clock */}
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.78rem',
-              color: 'var(--text-muted)',
-              display: 'none',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-            }}
-            className="desktop-clock"
-          >
-            {currentTime}
+    <header className="masthead-container">
+      {/* Top Editorial Sub-bar (WSJ/FT Style) */}
+      <div className="masthead-topbar">
+        <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+              {currentDateStr || 'Today'}
+            </span>
+            <span className="edition-badge">GLOBAL EDITION</span>
           </div>
 
-          {/* Bookmarks Toggle */}
-          <button
-            onClick={onShowSaved}
-            className={`btn-icon ${activeCategory === 'saved' ? 'active' : ''}`}
-            title="Saved Articles"
-            style={{ position: 'relative' }}
-          >
-            <Bookmark size={18} />
-            {savedCount > 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: -4,
-                  right: -4,
-                  background: 'var(--accent-amber)',
-                  color: '#000',
-                  fontSize: '0.65rem',
-                  fontWeight: 800,
-                  width: 17,
-                  height: 17,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {savedCount}
-              </span>
-            )}
-          </button>
-
-          {/* Refresh Feeds */}
-          <button
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            className="btn-icon"
-            title="Refresh Feeds"
-          >
-            <RefreshCw
-              size={18}
-              style={{
-                animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-              }}
-            />
-          </button>
-
-          {/* Theme switcher */}
-          <button
-            onClick={cycleTheme}
-            className="btn-icon"
-            title={`Theme: ${theme.toUpperCase()} (Click to toggle)`}
-          >
-            {theme === 'dark' ? (
-              <Moon size={18} />
-            ) : theme === 'light' ? (
-              <Sun size={18} />
-            ) : (
-              <Sparkles size={18} />
-            )}
-          </button>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)' }}>PWA & FCM Protocol Live</span>
+          </div>
         </div>
       </div>
-      <style jsx>{`
-        @media (min-width: 900px) {
-          .desktop-clock {
-            display: block !important;
-          }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+
+      {/* Primary Masthead & Logo */}
+      <div className="container masthead-main">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 16 }}>
+          {/* Masthead Title */}
+          <a href="/" className="masthead-brand">
+            <h1 className="masthead-title">FINANCIAL PULSE</h1>
+            <span className="masthead-tagline">Real-Time Market Intelligence & Portfolio Wire</span>
+          </a>
+
+          {/* Search Bar */}
+          <form onSubmit={onSearchSubmit} className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search companies, ticker symbols, executives (e.g. NVDA, TSLA, AI)..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
+          </form>
+
+          {/* Actions & Utilities */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Notification Bell (FCM) */}
+            <button
+              onClick={onOpenNotifications}
+              className="btn-icon"
+              title="Push Notification Settings"
+            >
+              <Bell size={17} />
+            </button>
+
+            {/* Bookmarks */}
+            <button
+              onClick={onShowSaved}
+              className={`btn-icon ${activeCategory === 'saved' ? 'active' : ''}`}
+              title="Saved Reading List"
+              style={{ position: 'relative' }}
+            >
+              <Bookmark size={17} />
+              {savedCount > 0 && (
+                <span className="header-badge-counter">{savedCount}</span>
+              )}
+            </button>
+
+            {/* Refresh */}
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="btn-icon"
+              title="Sync Live Feeds"
+            >
+              <RefreshCw
+                size={17}
+                style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }}
+              />
+            </button>
+
+            {/* Theme toggle */}
+            <button
+              onClick={cycleTheme}
+              className="btn-icon"
+              title={`Theme: ${theme.toUpperCase()} (Click to toggle)`}
+            >
+              {theme === 'dark' ? (
+                <Moon size={17} />
+              ) : theme === 'light' ? (
+                <Sun size={17} />
+              ) : (
+                <Sparkles size={17} />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
     </header>
   );
 }

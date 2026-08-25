@@ -1,0 +1,24 @@
+{
+  "name": "PulseNews — FT & WSJ Market Intelligence",
+  "short_name": "PulseNews",
+  "description": "Financial Times and Wall Street Journal style real-time market intelligence, portfolio tracking, and daily briefings.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d131f",
+  "theme_color": "#0d131f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

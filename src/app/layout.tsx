@@ -1,16 +1,26 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import Script from 'next/script';
 
 export const metadata: Metadata = {
-  title: 'PulseNews — Real-Time AI News & Market Intelligence',
+  title: 'Financial Pulse — FT & WSJ Market Intelligence Terminal',
   description:
-    'Stay ahead with 24/7 continuous news monitoring, Yahoo Finance market feeds, AI executive morning briefings, and distraction-free reader mode.',
-  keywords: ['news', 'finance', 'ai', 'yahoo finance', 'stock ticker', 'briefing', 'markets'],
+    'Financial Times and Wall Street Journal style real-time market intelligence, portfolio tracking, and AI daily briefings.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Financial Pulse',
+  },
+  keywords: ['financial times', 'wall street journal', 'stocks', 'portfolio', 'yahoo finance', 'market intelligence'],
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#0a0e17',
 };
 
 export default function RootLayout({
@@ -20,7 +30,29 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-theme="dark">
-      <body>{children}</body>
+      <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+      </head>
+      <body>
+        {children}
+        <Script id="register-sw" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(
+                  function(registration) {
+                    console.log('PWA Service Worker registered with scope: ', registration.scope);
+                  },
+                  function(err) {
+                    console.warn('PWA Service Worker registration failed: ', err);
+                  }
+                );
+              });
+            }
+          `}
+        </Script>
+      </body>
     </html>
   );
 }
