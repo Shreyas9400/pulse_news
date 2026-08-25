@@ -5,22 +5,25 @@ import Header from '@/components/Header';
 import BreakingTicker from '@/components/BreakingTicker';
 import ChannelFilter from '@/components/ChannelFilter';
 import BriefingHero from '@/components/BriefingHero';
+import PortfolioOverview from '@/components/PortfolioOverview';
 import NewsCard from '@/components/NewsCard';
 import ReaderModal from '@/components/ReaderModal';
 import PortfolioModal from '@/components/PortfolioModal';
-import { NewsArticle, StockTickerItem, DailyBriefing, CategoryId } from '@/lib/types';
-import { Sparkles, AlertCircle, RefreshCw, VolumeX, Plus, Wallet } from 'lucide-react';
+import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types';
+import { Sparkles, AlertCircle, RefreshCw, VolumeX, Plus, Wallet, ArrowRight } from 'lucide-react';
 
 const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD'];
+const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [marketTickers, setMarketTickers] = useState<StockTickerItem[]>([]);
+  const [stockQuotes, setStockQuotes] = useState<StockQuote[]>([]);
   const [briefing, setBriefing] = useState<DailyBriefing | null>(null);
-  const [activeCategory, setActiveCategory] = useState<CategoryId>('all');
+  const [activeCategory, setActiveCategory] = useState<CategoryId>('portfolio');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedStockFilter, setSelectedStockFilter] = useState<string | null>(null);
+  const [isRefreshingNews, setIsRefreshingNews] = useState(false);
+  const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
   
   // Local storage state
   const [savedArticles, setSavedArticles] = useState<NewsArticle[]>([]);
@@ -53,16 +56,36 @@ export default function HomePage() {
     }
   }, []);
 
+  // Fetch Live Stock Quotes from Yahoo Finance API
+  const fetchLiveQuotes = useCallback(async (customSymbols?: string[]) => {
+    setIsLoadingQuotes(true);
+    const symbolsToQuery = [...DEFAULT_INDICES, ...(customSymbols || portfolio)];
+    try {
+      const res = await fetch(`/api/stocks?symbols=${encodeURIComponent(symbolsToQuery.join(','))}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.quotes) {
+          setStockQuotes(data.quotes);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch live quotes:', e);
+    } finally {
+      setIsLoadingQuotes(false);
+    }
+  }, [portfolio]);
+
   // Fetch News and Briefing
-  const fetchNews = useCallback(async (cat: CategoryId = 'all', query: string = '', userPortfolio?: string[]) => {
-    setIsRefreshing(true);
-    setError(null);
+  const fetchNews = useCallback(async (cat: CategoryId = 'portfolio', query: string = '', stockFilter?: string | null) => {
+    setIsRefreshingNews(true);
 
     try {
       let url = `/api/news?category=${cat}`;
-      
-      if (cat === 'portfolio') {
-        const activeSymbols = userPortfolio || portfolio;
+
+      if (stockFilter) {
+        url = `/api/news?category=markets&symbols=${encodeURIComponent(stockFilter)}`;
+      } else if (cat === 'portfolio') {
+        const activeSymbols = portfolio.length > 0 ? portfolio : DEFAULT_PORTFOLIO;
         url = `/api/news?category=markets&symbols=${encodeURIComponent(activeSymbols.join(','))}`;
       } else if (query.trim()) {
         url = `/api/news?q=${encodeURIComponent(query.trim())}`;
@@ -75,14 +98,10 @@ export default function HomePage() {
       if (data.articles) {
         setArticles(data.articles);
       }
-      if (data.marketTickers) {
-        setMarketTickers(data.marketTickers);
-      }
     } catch (err: any) {
       console.error('Error fetching news:', err);
-      setError('Unable to reach feed server. Loaded cached offline news.');
     } finally {
-      setIsRefreshing(false);
+      setIsRefreshingNews(false);
     }
   }, [portfolio]);
 
@@ -101,27 +120,46 @@ export default function HomePage() {
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
-    fetchNews('all', '');
+    fetchLiveQuotes();
+    fetchNews('portfolio', '', null);
     fetchBriefing();
-  }, [fetchNews, fetchBriefing]);
+
+    // Auto-refresh live stock quotes every 45 seconds
+    const quoteInterval = setInterval(() => fetchLiveQuotes(), 45000);
+    return () => clearInterval(quoteInterval);
+  }, [fetchLiveQuotes, fetchNews, fetchBriefing]);
 
   // Handle Category selection
   const handleSelectCategory = (cat: CategoryId) => {
     setActiveCategory(cat);
     setSearchQuery('');
+    setSelectedStockFilter(null);
     if (cat !== 'saved') {
-      fetchNews(cat, '', portfolio);
+      fetchNews(cat, '', null);
+    }
+  };
+
+  // Filter news for a specific clicked stock
+  const handleSelectStockFilter = (symbol: string) => {
+    if (!symbol) {
+      setSelectedStockFilter(null);
+      fetchNews(activeCategory, searchQuery, null);
+    } else {
+      setSelectedStockFilter(symbol);
+      fetchNews('markets', '', symbol);
     }
   };
 
   // Handle Search Submission
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSelectedStockFilter(null);
     if (searchQuery.trim()) {
-      fetchNews('all', searchQuery);
+      fetchNews('all', searchQuery, null);
     } else {
-      fetchNews(activeCategory, '', portfolio);
+      fetchNews(activeCategory, '', null);
     }
   };
 
@@ -144,13 +182,15 @@ export default function HomePage() {
 
   // Portfolio Management
   const handleAddSymbol = (sym: string) => {
-    const updated = [...new Set([...portfolio, sym.toUpperCase()])];
+    const clean = sym.toUpperCase();
+    const updated = [...new Set([...portfolio, clean])];
     setPortfolio(updated);
     try {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
+    fetchLiveQuotes(updated);
     if (activeCategory === 'portfolio') {
-      fetchNews('portfolio', '', updated);
+      fetchNews('portfolio', '', null);
     }
   };
 
@@ -160,8 +200,9 @@ export default function HomePage() {
     try {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
+    fetchLiveQuotes(updated);
     if (activeCategory === 'portfolio') {
-      fetchNews('portfolio', '', updated);
+      fetchNews('portfolio', '', null);
     }
   };
 
@@ -197,14 +238,15 @@ export default function HomePage() {
     }
   };
 
-  // Current list to display
+  // Separate user portfolio quotes from broad market indices
+  const userPortfolioQuotes = stockQuotes.filter(q => portfolio.includes(q.symbol));
   const displayedArticles = activeCategory === 'saved' ? savedArticles : articles;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Real-time Market Ticker (Yahoo Finance) */}
+      {/* Real-time Authentic Market Ticker (Yahoo Finance) */}
       <BreakingTicker
-        tickers={marketTickers}
+        quotes={stockQuotes}
         onOpenPortfolio={() => setIsPortfolioModalOpen(true)}
       />
 
@@ -214,10 +256,11 @@ export default function HomePage() {
         onSearchChange={setSearchQuery}
         onSearchSubmit={handleSearchSubmit}
         onRefresh={() => {
-          fetchNews(activeCategory, searchQuery, portfolio);
+          fetchLiveQuotes();
+          fetchNews(activeCategory, searchQuery, selectedStockFilter);
           fetchBriefing();
         }}
-        isRefreshing={isRefreshing}
+        isRefreshing={isRefreshingNews || isLoadingQuotes}
         savedCount={savedArticles.length}
         onShowSaved={() => handleSelectCategory('saved')}
         activeCategory={activeCategory}
@@ -231,6 +274,19 @@ export default function HomePage() {
           savedCount={savedArticles.length}
           portfolioCount={portfolio.length}
         />
+
+        {/* Executive Portfolio Dashboard Panel (Active on Portfolio tab or All tab) */}
+        {(activeCategory === 'portfolio' || activeCategory === 'all') && !searchQuery && (
+          <PortfolioOverview
+            quotes={userPortfolioQuotes.length > 0 ? userPortfolioQuotes : stockQuotes.filter(q => !DEFAULT_INDICES.includes(q.symbol))}
+            onOpenManageModal={() => setIsPortfolioModalOpen(true)}
+            onSelectSymbolFilter={handleSelectStockFilter}
+            selectedSymbolFilter={selectedStockFilter}
+            onRefreshQuotes={() => fetchLiveQuotes()}
+            isLoadingQuotes={isLoadingQuotes}
+            onRemoveSymbol={handleRemoveSymbol}
+          />
+        )}
 
         {/* AI Morning/Executive Briefing Section (Visible on Top Headlines tab) */}
         {activeCategory === 'all' && !searchQuery && (
@@ -257,8 +313,10 @@ export default function HomePage() {
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>
               {activeCategory === 'saved'
                 ? 'Saved Articles & Reading List'
+                : selectedStockFilter
+                ? `Tailored Headlines for $${selectedStockFilter}`
                 : activeCategory === 'portfolio'
-                ? '💼 My Tracked Portfolio News (Yahoo Finance)'
+                ? '💼 Curated News for Your Portfolio'
                 : searchQuery
                 ? `Search Results for "${searchQuery}"`
                 : activeCategory === 'markets'
@@ -276,32 +334,30 @@ export default function HomePage() {
                 : 'Real-Time Top Stories'}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
-              {activeCategory === 'portfolio'
-                ? `Tracking ${portfolio.length} symbols (${portfolio.join(', ')})`
-                : `${displayedArticles.length} stories synced • Stale-While-Revalidate active`}
+              {selectedStockFilter
+                ? `Showing latest developments regarding ${selectedStockFilter}`
+                : activeCategory === 'portfolio'
+                ? `Aggregated live across ${portfolio.join(', ')} via Yahoo Finance`
+                : `${displayedArticles.length} stories synced • Real-time live feeds`}
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
-            {activeCategory === 'portfolio' && (
+            {selectedStockFilter && (
               <button
-                onClick={() => setIsPortfolioModalOpen(true)}
+                onClick={() => handleSelectStockFilter('')}
                 style={{
-                  background: 'var(--accent-primary)',
-                  color: '#fff',
-                  border: 'none',
+                  background: 'rgba(6, 182, 212, 0.15)',
+                  border: '1px solid var(--accent-cyan)',
+                  color: '#38bdf8',
                   padding: '6px 14px',
                   borderRadius: 'var(--radius-full)',
-                  fontSize: '0.82rem',
+                  fontSize: '0.8rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
                 }}
               >
-                <Plus size={14} />
-                <span>Manage Portfolio Tickers</span>
+                Clear ${selectedStockFilter} Filter
               </button>
             )}
 
@@ -309,7 +365,7 @@ export default function HomePage() {
               <button
                 onClick={() => {
                   setSearchQuery('');
-                  fetchNews(activeCategory, '', portfolio);
+                  fetchNews(activeCategory, '', null);
                 }}
                 style={{
                   background: 'transparent',
@@ -328,7 +384,7 @@ export default function HomePage() {
         </div>
 
         {/* Empty State / Loading State */}
-        {isRefreshing && displayedArticles.length === 0 ? (
+        {isRefreshingNews && displayedArticles.length === 0 ? (
           <div
             style={{
               padding: '60px 20px',
@@ -344,7 +400,7 @@ export default function HomePage() {
                 color: 'var(--accent-primary)',
               }}
             />
-            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Aggregating fresh feeds from multi-source RSS network...</p>
+            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Aggregating live news and market intelligence...</p>
           </div>
         ) : displayedArticles.length === 0 ? (
           <div
@@ -360,9 +416,7 @@ export default function HomePage() {
             <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               {activeCategory === 'saved'
                 ? 'You have no saved articles yet. Bookmark stories using the bookmark icon to read them anytime.'
-                : activeCategory === 'portfolio'
-                ? 'No recent headlines found for your portfolio symbols. Click "Manage Portfolio Tickers" to add more symbols.'
-                : 'No matching articles found for this topic.'}
+                : 'No recent headlines found for this topic or portfolio.'}
             </p>
           </div>
         ) : (
@@ -454,10 +508,10 @@ export default function HomePage() {
       >
         <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <strong>PulseNews</strong> • Continuous AI-Powered Intelligence Platform
+            <strong>PulseNews</strong> • Real-Time AI News & Portfolio Intelligence Terminal
           </div>
           <div>
-            Zero-Maintenance Architecture • Deployable to Vercel with ISR & GitHub Actions Cron
+            Continuous Yahoo Finance Stream • Deployable to Vercel
           </div>
         </div>
       </footer>

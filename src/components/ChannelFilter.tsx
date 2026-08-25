@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CategoryId, CategoryTab } from '@/lib/types';
+import { CategoryId } from '@/lib/types';
 import { Sparkles, TrendingUp, Cpu, Globe, Briefcase, Atom, Bookmark, Layers, Wallet } from 'lucide-react';
 
 interface ChannelFilterProps {
@@ -11,9 +11,9 @@ interface ChannelFilterProps {
   portfolioCount?: number;
 }
 
-const CATEGORIES: { id: CategoryId; label: string; icon: any }[] = [
+const CATEGORIES: { id: CategoryId; label: string; icon: any; isFeatured?: boolean }[] = [
+  { id: 'portfolio', label: '💼 My Portfolio', icon: Wallet, isFeatured: true },
   { id: 'all', label: 'Top Headlines', icon: Layers },
-  { id: 'portfolio', label: '💼 My Portfolio', icon: Wallet },
   { id: 'markets', label: 'Yahoo Finance & Markets', icon: TrendingUp },
   { id: 'ai', label: 'AI & Frontier Tech', icon: Sparkles },
   { id: 'tech', label: 'Tech & Startups', icon: Cpu },
@@ -27,6 +27,7 @@ export default function ChannelFilter({
   activeCategory,
   onSelectCategory,
   savedCount,
+  portfolioCount = 0,
 }: ChannelFilterProps) {
   return (
     <nav className="channels-nav" aria-label="News Channels">
@@ -38,23 +39,15 @@ export default function ChannelFilter({
           <button
             key={cat.id}
             onClick={() => onSelectCategory(cat.id)}
-            className={`channel-pill ${isActive ? 'active' : ''}`}
+            className={`channel-pill ${isActive ? 'active' : ''} ${cat.isFeatured ? 'featured-pill' : ''}`}
           >
             <Icon size={15} />
             <span>{cat.label}</span>
+            {cat.id === 'portfolio' && portfolioCount > 0 && (
+              <span className="pill-badge-count">{portfolioCount}</span>
+            )}
             {cat.id === 'saved' && savedCount > 0 && (
-              <span
-                style={{
-                  background: isActive ? '#ffffff' : 'var(--accent-amber)',
-                  color: isActive ? '#000' : '#000',
-                  padding: '1px 6px',
-                  borderRadius: 10,
-                  fontSize: '0.7rem',
-                  fontWeight: 800,
-                }}
-              >
-                {savedCount}
-              </span>
+              <span className="pill-badge-count">{savedCount}</span>
             )}
           </button>
         );

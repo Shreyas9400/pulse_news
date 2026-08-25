@@ -1,6 +1,6 @@
 import Parser from 'rss-parser';
 import * as cheerio from 'cheerio';
-import { NewsArticle, StockTickerItem } from './types';
+import { NewsArticle, StockQuote, StockTickerItem } from './types';
 import { RSS_SOURCES, getCustomSearchRssUrl, getYahooStockRssUrl, RssSource } from './rss-sources';
 
 const parser = new Parser({
@@ -278,17 +278,17 @@ export function getFallbackNews(): NewsArticle[] {
 }
 
 /**
- * Returns a live market overview ticker dataset
+ * Returns fallback market overview ticker dataset
  */
-export function getLiveMarketTickers(): StockTickerItem[] {
+export function getLiveMarketTickers(): StockQuote[] {
   return [
-    { symbol: '^GSPC', name: 'S&P 500', price: '5,648.40', change: '+0.72%', isPositive: true, link: 'https://finance.yahoo.com/quote/%5EGSPC' },
-    { symbol: '^IXIC', name: 'Nasdaq', price: '17,877.22', change: '+1.14%', isPositive: true, link: 'https://finance.yahoo.com/quote/%5EIXIC' },
-    { symbol: '^DJI', name: 'Dow Jones', price: '41,250.50', change: '+0.18%', isPositive: true, link: 'https://finance.yahoo.com/quote/%5EDJI' },
-    { symbol: 'NVDA', name: 'Nvidia Corp', price: '128.50', change: '+4.25%', isPositive: true, link: 'https://finance.yahoo.com/quote/NVDA' },
-    { symbol: 'AAPL', name: 'Apple Inc', price: '227.10', change: '+0.85%', isPositive: true, link: 'https://finance.yahoo.com/quote/AAPL' },
-    { symbol: 'MSFT', name: 'Microsoft', price: '448.90', change: '+0.60%', isPositive: true, link: 'https://finance.yahoo.com/quote/MSFT' },
-    { symbol: 'BTC-USD', name: 'Bitcoin', price: '$64,250', change: '+2.80%', isPositive: true, link: 'https://finance.yahoo.com/quote/BTC-USD' },
-    { symbol: 'ETH-USD', name: 'Ethereum', price: '$3,420', change: '+1.95%', isPositive: true, link: 'https://finance.yahoo.com/quote/ETH-USD' },
+    { symbol: '^GSPC', shortName: 'S&P 500', price: 7677.28, formattedPrice: '$7,677.28', change: 24.42, changePercent: 0.32, formattedChange: '+0.32%', isPositive: true, currency: 'USD' },
+    { symbol: '^IXIC', shortName: 'Nasdaq', price: 21550.10, formattedPrice: '$21,550.10', change: 110.20, changePercent: 0.51, formattedChange: '+0.51%', isPositive: true, currency: 'USD' },
+    { symbol: '^DJI', shortName: 'Dow Jones', price: 44250.50, formattedPrice: '$44,250.50', change: 80.15, changePercent: 0.18, formattedChange: '+0.18%', isPositive: true, currency: 'USD' },
+    { symbol: 'NVDA', shortName: 'NVIDIA Corp', price: 213.05, formattedPrice: '$213.05', change: 4.57, changePercent: 2.19, formattedChange: '+2.19%', isPositive: true, currency: 'USD' },
+    { symbol: 'AAPL', shortName: 'Apple Inc', price: 309.90, formattedPrice: '$309.90', change: -0.44, changePercent: -0.14, formattedChange: '-0.14%', isPositive: false, currency: 'USD' },
+    { symbol: 'MSFT', shortName: 'Microsoft Corp', price: 491.71, formattedPrice: '$491.71', change: 4.40, changePercent: 0.90, formattedChange: '+0.90%', isPositive: true, currency: 'USD' },
+    { symbol: 'TSLA', shortName: 'Tesla Inc', price: 350.25, formattedPrice: '$350.25', change: 1.30, changePercent: 0.37, formattedChange: '+0.37%', isPositive: true, currency: 'USD' },
+    { symbol: 'BTC-USD', shortName: 'Bitcoin USD', price: 78586.50, formattedPrice: '$78,586.50', change: -395.77, changePercent: -0.50, formattedChange: '-0.50%', isPositive: false, currency: 'USD' },
   ];
 }

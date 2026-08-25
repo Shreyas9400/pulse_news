@@ -1,67 +1,54 @@
 'use client';
 
 import React from 'react';
-import { StockTickerItem } from '@/lib/types';
-import { TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react';
+import { StockQuote } from '@/lib/types';
+import { TrendingUp, TrendingDown, Edit3 } from 'lucide-react';
 
 interface BreakingTickerProps {
-  tickers: StockTickerItem[];
-  breakingHeadlines?: string[];
-  onOpenPortfolio?: () => void;
+  quotes: StockQuote[];
+  onOpenPortfolio: () => void;
 }
 
-export default function BreakingTicker({ tickers, breakingHeadlines = [], onOpenPortfolio }: BreakingTickerProps) {
-  // Duplicate array to enable infinite seamless CSS loop
-  const loopItems = [...tickers, ...tickers];
+export default function BreakingTicker({ quotes, onOpenPortfolio }: BreakingTickerProps) {
+  // If quotes are empty, show fallback indices while loading
+  const displayQuotes = quotes.length > 0 ? quotes : [];
+  const loopItems = [...displayQuotes, ...displayQuotes];
 
   return (
-    <div className="ticker-wrapper" aria-label="Stock & Market Ticker">
+    <div className="ticker-wrapper" aria-label="Real-Time Yahoo Finance Ticker">
       <button
         onClick={onOpenPortfolio}
-        style={{
-          padding: '0 14px',
-          background: 'linear-gradient(135deg, var(--accent-primary), #06b6d4)',
-          color: '#fff',
-          fontSize: '0.72rem',
-          fontWeight: 800,
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          zIndex: 2,
-          letterSpacing: '0.05em',
-          border: 'none',
-          cursor: 'pointer',
-        }}
-        title="Click to customize your Portfolio / Watchlist"
+        className="ticker-badge-btn"
+        title="Click to edit your Portfolio Watchlist"
       >
-        <span>MARKETS</span>
-        <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.25)', padding: '1px 5px', borderRadius: 4 }}>+ EDIT</span>
+        <span className="ticker-live-dot" />
+        <span>PORTFOLIO</span>
+        <Edit3 size={11} style={{ opacity: 0.8 }} />
       </button>
+
       <div className="ticker-track">
         {loopItems.map((item, idx) => (
           <a
             key={`${item.symbol}-${idx}`}
-            href={item.link}
+            href={`https://finance.yahoo.com/quote/${encodeURIComponent(item.symbol)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="ticker-item"
           >
-            <span className="ticker-symbol">{item.symbol}</span>
-            <span style={{ opacity: 0.6 }}>({item.name})</span>
-            <span className="ticker-val">{item.price}</span>
+            <span className="ticker-symbol">${item.symbol}</span>
+            <span className="ticker-name">({item.shortName})</span>
+            <span className="ticker-val">{item.formattedPrice}</span>
             <span
-              className={`ticker-val ${
+              className={`ticker-change-badge ${
                 item.isPositive ? 'ticker-positive' : 'ticker-negative'
               }`}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}
             >
               {item.isPositive ? (
-                <TrendingUp size={12} />
+                <TrendingUp size={11} />
               ) : (
-                <TrendingDown size={12} />
+                <TrendingDown size={11} />
               )}
-              {item.change}
+              {item.formattedChange}
             </span>
           </a>
         ))}

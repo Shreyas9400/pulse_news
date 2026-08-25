@@ -1,3 +1,21 @@
+export interface StockQuote {
+  symbol: string;
+  shortName: string;
+  price: number;
+  formattedPrice: string;
+  change: number;
+  changePercent: number;
+  formattedChange: string;
+  isPositive: boolean;
+  currency: string;
+  high?: number;
+  low?: number;
+  volume?: string;
+  sparkline?: number[];
+}
+
+export type StockTickerItem = StockQuote;
+
 export interface NewsArticle {
   id: string;
   title: string;
@@ -21,15 +39,6 @@ export interface NewsArticle {
   };
 }
 
-export interface StockTickerItem {
-  symbol: string;
-  name: string;
-  price?: string;
-  change?: string;
-  isPositive?: boolean;
-  link: string;
-}
-
 export interface DailyBriefing {
   date: string;
   greeting: string;
@@ -41,8 +50,8 @@ export interface DailyBriefing {
 }
 
 export type CategoryId =
-  | 'all'
   | 'portfolio'
+  | 'all'
   | 'markets'
   | 'tech'
   | 'ai'
@@ -57,4 +66,3 @@ export interface CategoryTab {
   icon: string;
   badge?: string;
 }
-
