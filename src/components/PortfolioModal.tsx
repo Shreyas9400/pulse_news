@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, TrendingUp, Check, BarChart2, Tag, Building2, Search, Zap, FileText } from 'lucide-react';
+import { X, Plus, TrendingUp, Check, BarChart2, Tag, Building2, Search, Zap, FileText, Edit2, RotateCcw } from 'lucide-react';
 import { SECTOR_DIRECTORY, getTickerMeta, saveCustomMetadata, TickerMetadata } from '@/lib/stock-aliases';
 import { DEFAULT_CIK_DIRECTORY } from '@/lib/sec-edgar';
 
@@ -40,6 +40,9 @@ export default function PortfolioModal({
   const [sectorName, setSectorName] = useState('');
   const [sectorAliases, setSectorAliases] = useState('');
 
+  // Editing state
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -56,8 +59,41 @@ export default function PortfolioModal({
     }
   };
 
-  // Add Stock (with Ticker + Name + CIK + Aliases)
-  const handleAddStock = (e: React.FormEvent) => {
+  // Start editing a stock
+  const handleStartEditStock = (symbol: string) => {
+    const meta = getTickerMeta(symbol);
+    setEditingKey(symbol);
+    setStockSymbol(symbol);
+    setStockName(meta?.name || symbol);
+    setStockCik(meta?.cik || DEFAULT_CIK_DIRECTORY[symbol] || '');
+    setStockAliases(meta?.aliases ? meta.aliases.join(', ') : '');
+    setActiveTab('stocks');
+    setError(null);
+  };
+
+  // Start editing a sector
+  const handleStartEditSector = (sectorId: string) => {
+    const meta = getTickerMeta(sectorId);
+    setEditingKey(sectorId);
+    setSectorName(meta?.name || sectorId.replace(/_/g, ' '));
+    setSectorAliases(meta?.aliases ? meta.aliases.join(', ') : '');
+    setActiveTab('sectors');
+    setError(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingKey(null);
+    setStockSymbol('');
+    setStockName('');
+    setStockCik('');
+    setStockAliases('');
+    setSectorName('');
+    setSectorAliases('');
+    setError(null);
+  };
+
+  // Add or Save Stock
+  const handleAddOrSaveStock = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = stockSymbol.trim().toUpperCase();
     if (!clean) {
@@ -65,7 +101,7 @@ export default function PortfolioModal({
       return;
     }
 
-    if (portfolio.includes(clean)) {
+    if (!editingKey && portfolio.includes(clean)) {
       setError(`"${clean}" IS ALREADY IN YOUR WATCHLIST.`);
       return;
     }
@@ -89,15 +125,11 @@ export default function PortfolioModal({
     saveCustomMetadata(clean, customMeta);
     onAddSymbol(clean, customMeta);
 
-    setStockSymbol('');
-    setStockName('');
-    setStockCik('');
-    setStockAliases('');
-    setError(null);
+    handleCancelEdit();
   };
 
-  // Add Sector (Pure Name + Aliases — NO TICKER)
-  const handleAddSector = (e: React.FormEvent) => {
+  // Add or Save Sector
+  const handleAddOrSaveSector = (e: React.FormEvent) => {
     e.preventDefault();
     const nameClean = sectorName.trim().toUpperCase();
     if (!nameClean) {
@@ -106,7 +138,7 @@ export default function PortfolioModal({
     }
 
     const sectorId = nameClean.replace(/\s+/g, '_');
-    if (portfolio.includes(sectorId) || portfolio.includes(nameClean)) {
+    if (!editingKey && (portfolio.includes(sectorId) || portfolio.includes(nameClean))) {
       setError(`"${nameClean}" IS ALREADY IN YOUR SECTORS.`);
       return;
     }
@@ -127,9 +159,7 @@ export default function PortfolioModal({
     saveCustomMetadata(sectorId, customMeta);
     onAddSymbol(sectorId, customMeta);
 
-    setSectorName('');
-    setSectorAliases('');
-    setError(null);
+    handleCancelEdit();
   };
 
   const handleToggle = (sym: string) => {
@@ -163,7 +193,7 @@ export default function PortfolioModal({
             <div>
               <h3 className="modal-title-serif">PORTFOLIO & SEC FILINGS CIK MANAGER</h3>
               <p className="modal-subtitle">
-                TRACK US FIXED INCOME ISSUERS (WITH SEC CIK FOR 10-K/10-Q/8-K) OR INDUSTRY SECTORS
+                ADD, EDIT ISSUER NAMES, SEC CIK & ALIASES, OR TRACK SECTORS
               </p>
             </div>
           </div>
@@ -200,7 +230,22 @@ export default function PortfolioModal({
 
         {/* Form Mode 1: Stocks (Ticker + Name + SEC CIK + Aliases) */}
         {activeTab === 'stocks' ? (
-          <form onSubmit={handleAddStock} className="portfolio-detailed-form">
+          <form onSubmit={handleAddOrSaveStock} className="portfolio-detailed-form">
+            {editingKey && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, background: 'rgba(212, 175, 55, 0.12)', padding: '6px 10px', borderRadius: 2, border: '1px solid var(--accent-gold)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
+                  EDITING ISSUER: ${editingKey}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.72rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                >
+                  <RotateCcw size={11} /> CANCEL
+                </button>
+              </div>
+            )}
+
             <div className="form-fields-grid">
               {/* Ticker Symbol */}
               <div className="form-field-group">
@@ -211,7 +256,7 @@ export default function PortfolioModal({
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. NVDA, JPM, AAPL, MSFT"
+                  placeholder="E.G. NVDA, JPM, CCLFX, BCSF"
                   value={stockSymbol}
                   onChange={(e) => handleSymbolChange(e.target.value)}
                   autoFocus
@@ -222,18 +267,18 @@ export default function PortfolioModal({
               <div className="form-field-group">
                 <label className="form-field-label">
                   <Building2 size={12} />
-                  <span>ISSUER / COMPANY NAME</span>
+                  <span>EDIT ISSUER / COMPANY NAME</span>
                 </label>
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. NVIDIA CORPORATION"
+                  placeholder="E.G. CLIFFWATER CORPORATE LENDING FUND"
                   value={stockName}
                   onChange={(e) => setStockName(e.target.value.toUpperCase())}
                 />
               </div>
 
-              {/* SEC CIK (Crucial for 10-K/10-Q EDGAR Credit Filings) */}
+              {/* SEC CIK */}
               <div className="form-field-group">
                 <label className="form-field-label">
                   <FileText size={12} color="var(--accent-gold)" />
@@ -260,7 +305,7 @@ export default function PortfolioModal({
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. JENSEN HUANG, BLACKWELL GPU, AI CHIPS"
+                  placeholder="E.G. CLIFFWATER, DIRECT LENDING, PRIVATE CREDIT"
                   value={stockAliases}
                   onChange={(e) => setStockAliases(e.target.value.toUpperCase())}
                 />
@@ -270,20 +315,45 @@ export default function PortfolioModal({
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              {editingKey && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="btn-portfolio-action"
+                  style={{ height: 42, fontSize: '0.85rem' }}
+                >
+                  CANCEL
+                </button>
+              )}
               <button
                 type="submit"
                 className="btn-portfolio-primary"
                 style={{ padding: '0 20px', height: 42, fontSize: '0.85rem' }}
               >
-                <Plus size={15} />
-                <span>ADD ISSUER TO WATCHLIST</span>
+                {editingKey ? <Check size={15} /> : <Plus size={15} />}
+                <span>{editingKey ? 'SAVE CHANGES' : 'ADD ISSUER TO WATCHLIST'}</span>
               </button>
             </div>
           </form>
         ) : (
           /* Form Mode 2: Sectors (Pure Name + Search Aliases — NO TICKER) */
-          <form onSubmit={handleAddSector} className="portfolio-detailed-form">
+          <form onSubmit={handleAddOrSaveSector} className="portfolio-detailed-form">
+            {editingKey && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, background: 'rgba(212, 175, 55, 0.12)', padding: '6px 10px', borderRadius: 2, border: '1px solid var(--accent-gold)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
+                  EDITING SECTOR: {editingKey}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.72rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                >
+                  <RotateCcw size={11} /> CANCEL
+                </button>
+              </div>
+            )}
+
             <div className="form-fields-grid">
               {/* Sector Name */}
               <div className="form-field-group full-width">
@@ -294,7 +364,7 @@ export default function PortfolioModal({
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. SEMICONDUCTORS, US FIXED INCOME, US BANKING"
+                  placeholder="E.G. SEMICONDUCTORS, US FIXED INCOME, DIRECT LENDING"
                   value={sectorName}
                   onChange={(e) => {
                     setSectorName(e.target.value.toUpperCase());
@@ -313,7 +383,7 @@ export default function PortfolioModal({
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. CHIPS, FAB CAPACITY, TREASURIES, CREDIT SPREADS"
+                  placeholder="E.G. PRIVATE CREDIT, LOANS, TREASURIES, CREDIT SPREADS"
                   value={sectorAliases}
                   onChange={(e) => setSectorAliases(e.target.value.toUpperCase())}
                 />
@@ -323,14 +393,24 @@ export default function PortfolioModal({
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              {editingKey && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="btn-portfolio-action"
+                  style={{ height: 42, fontSize: '0.85rem' }}
+                >
+                  CANCEL
+                </button>
+              )}
               <button
                 type="submit"
                 className="btn-portfolio-primary"
                 style={{ padding: '0 20px', height: 42, fontSize: '0.85rem', background: 'var(--accent-gold)', color: '#121212' }}
               >
-                <Plus size={15} />
-                <span>ADD SECTOR TRACKER</span>
+                {editingKey ? <Check size={15} /> : <Plus size={15} />}
+                <span>{editingKey ? 'SAVE SECTOR CHANGES' : 'ADD SECTOR TRACKER'}</span>
               </button>
             </div>
           </form>
@@ -362,15 +442,32 @@ export default function PortfolioModal({
                       <span className="chip-symbol">
                         {meta?.isSector ? '' : '$'}{meta?.name || symbol}
                       </span>
+                      {meta?.cik && <span style={{ fontSize: '0.62rem', color: 'var(--accent-gold)' }}>CIK: {meta.cik}</span>}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveSymbol(symbol)}
-                      className="chip-remove-btn"
-                      title={`Remove ${symbol}`}
-                    >
-                      <X size={12} />
-                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (meta?.isSector) handleStartEditSector(symbol);
+                          else handleStartEditStock(symbol);
+                        }}
+                        className="chip-remove-btn"
+                        title={`Edit ${symbol}`}
+                        style={{ color: 'var(--accent-gold)' }}
+                      >
+                        <Edit2 size={11} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onRemoveSymbol(symbol)}
+                        className="chip-remove-btn"
+                        title={`Remove ${symbol}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
