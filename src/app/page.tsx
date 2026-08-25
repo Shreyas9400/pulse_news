@@ -60,13 +60,16 @@ export default function HomePage() {
     }
 
     // Listen for FCM foreground push notifications
-    const unsubscribeFCM = listenForFCMForegroundMessages((payload) => {
+    let unsubscribe: any = null;
+    listenForFCMForegroundMessages((payload) => {
       console.log('Foreground FCM received:', payload);
       alert(`[Market Alert] ${payload.notification?.title}: ${payload.notification?.body}`);
+    }).then((unsub) => {
+      unsubscribe = unsub;
     });
 
     return () => {
-      if (typeof unsubscribeFCM === 'function') unsubscribeFCM();
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
 
