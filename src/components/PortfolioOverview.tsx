@@ -1,8 +1,16 @@
 'use client';
 
 import React from 'react';
-import { StockQuote } from '@/lib/types';
-import { TrendingUp, TrendingDown, Plus, RefreshCw, X } from 'lucide-react';
+import { StockQuote, NewsArticle } from '@/lib/types';
+import { TrendingUp, TrendingDown, Plus, RefreshCw, X, Newspaper, AlertTriangle, CheckCircle, MinusCircle } from 'lucide-react';
+import { getTickerMeta } from '@/lib/stock-aliases';
+
+export interface PortfolioEntitySummary {
+  symbol: string;
+  sentiment: 'positive' | 'neutral' | 'negative';
+  headline: string;
+  newsCount: number;
+}
 
 interface PortfolioOverviewProps {
   quotes: StockQuote[];
@@ -12,6 +20,7 @@ interface PortfolioOverviewProps {
   onRefreshQuotes: () => void;
   isLoadingQuotes: boolean;
   onRemoveSymbol: (symbol: string) => void;
+  entitySummaries?: PortfolioEntitySummary[];
 }
 
 export default function PortfolioOverview({
@@ -22,6 +31,7 @@ export default function PortfolioOverview({
   onRefreshQuotes,
   isLoadingQuotes,
   onRemoveSymbol,
+  entitySummaries = [],
 }: PortfolioOverviewProps) {
   if (quotes.length === 0) return null;
 
@@ -30,6 +40,18 @@ export default function PortfolioOverview({
     ? validQuotes.reduce((acc, q) => acc + q.changePercent, 0) / validQuotes.length
     : 0;
   const isPortfolioPositive = avgChange >= 0;
+
+  const getSentimentIcon = (sentiment: string) => {
+    if (sentiment === 'positive') return <CheckCircle size={11} color="#10b981" />;
+    if (sentiment === 'negative') return <AlertTriangle size={11} color="#f43f5e" />;
+    return <MinusCircle size={11} color="#94a3b8" />;
+  };
+
+  const getSentimentColor = (sentiment: string) => {
+    if (sentiment === 'positive') return '#10b981';
+    if (sentiment === 'negative') return '#f43f5e';
+    return '#94a3b8';
+  };
 
   return (
     <section className="portfolio-dashboard-panel" aria-label="Portfolio Overview">
@@ -48,7 +70,7 @@ export default function PortfolioOverview({
               </span>
             </div>
             <p className="portfolio-subtitle">
-              Live Yahoo Finance quotes • Tap asset to filter news wire
+              Live prices auto-refresh every 45s • Tap asset for intelligence wire
             </p>
           </div>
         </div>
@@ -67,7 +89,7 @@ export default function PortfolioOverview({
           <button
             onClick={onOpenManageModal}
             className="btn-portfolio-primary"
-            title="Add or remove stocks"
+            title="Add stocks or sectors"
           >
             <Plus size={14} />
             <span>Add Asset</span>
@@ -79,6 +101,8 @@ export default function PortfolioOverview({
       <div className="portfolio-cards-grid">
         {quotes.map((quote) => {
           const isSelected = selectedSymbolFilter === quote.symbol;
+          const meta = getTickerMeta(quote.symbol);
+          const entitySummary = entitySummaries.find(s => s.symbol === quote.symbol);
 
           return (
             <div
@@ -89,7 +113,14 @@ export default function PortfolioOverview({
               <div className="portfolio-card-top">
                 <div className="portfolio-sym-wrap">
                   <span className="portfolio-card-symbol">${quote.symbol}</span>
-                  <span className="portfolio-card-name">{quote.shortName}</span>
+                  <span className="portfolio-card-name">
+                    {meta?.name || quote.shortName}
+                  </span>
+                  {meta && (
+                    <span className="portfolio-card-industry">
+                      {meta.isSector ? '📊 ' : ''}{meta.industry}
+                    </span>
+                  )}
                 </div>
 
                 <div className="portfolio-chip-wrap">
@@ -141,6 +172,30 @@ export default function PortfolioOverview({
                     />
                   </div>
                   <span>H: ${quote.high.toFixed(1)}</span>
+                </div>
+              )}
+
+              {/* Entity News Sentiment Summary */}
+              {entitySummary && (
+                <div
+                  className="portfolio-card-sentiment"
+                  style={{ borderColor: getSentimentColor(entitySummary.sentiment) + '30' }}
+                >
+                  <div className="sentiment-row">
+                    {getSentimentIcon(entitySummary.sentiment)}
+                    <span
+                      className="sentiment-label"
+                      style={{ color: getSentimentColor(entitySummary.sentiment) }}
+                    >
+                      {entitySummary.sentiment.toUpperCase()}
+                    </span>
+                    <span className="sentiment-count">
+                      <Newspaper size={9} /> {entitySummary.newsCount} stories
+                    </span>
+                  </div>
+                  <p className="sentiment-headline">
+                    {entitySummary.headline}
+                  </p>
                 </div>
               )}
             </div>

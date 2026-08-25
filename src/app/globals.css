@@ -1500,3 +1500,292 @@ body {
   padding: 1px 3px;
   border-radius: 6px;
 }
+
+/* ==========================================================================
+   PORTFOLIO ENTITY SENTIMENT SUMMARY CARD
+   ========================================================================== */
+.portfolio-card-industry {
+  font-size: 0.6rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+  margin-top: 1px;
+  opacity: 0.85;
+}
+
+.portfolio-card-sentiment {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 0.68rem;
+}
+
+.sentiment-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.sentiment-label {
+  font-weight: 800;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sentiment-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sentiment-headline {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   PORTFOLIO MODAL — TABS & SECTOR CHIPS
+   ========================================================================== */
+.portfolio-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.portfolio-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.portfolio-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-gold);
+}
+
+.portfolio-tab:hover {
+  color: var(--text-primary);
+}
+
+.modal-header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-error-msg {
+  color: var(--accent-rose);
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: rgba(244, 63, 94, 0.1);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.portfolio-watchlist-section {
+  margin-bottom: 14px;
+}
+
+.portfolio-suggestions-section {
+  margin-bottom: 14px;
+}
+
+.chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.chip-symbol {
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+
+.chip-name {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Detailed Suggestion Chip (with name + industry) */
+.suggestion-chip-detailed {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  min-width: 0;
+}
+
+.suggestion-chip-detailed:hover {
+  border-color: var(--accent-gold);
+  color: var(--text-primary);
+}
+
+.suggestion-chip-detailed.active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.suggestion-chip-top {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.suggestion-symbol {
+  font-size: 0.75rem;
+}
+
+.suggestion-name {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-industry {
+  font-size: 0.58rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  opacity: 0.8;
+}
+
+.suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 6px;
+}
+
+@media (min-width: 640px) {
+  .suggestions-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
+
+/* Alias Info Box */
+.alias-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-top: 14px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.alias-info-box strong {
+  color: var(--accent-gold);
+  font-size: 0.78rem;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.alias-info-box p {
+  margin: 0;
+}
+
+/* Floating Audio */
+.audio-bar {
+  position: fixed;
+  bottom: 74px;
+  right: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  z-index: 80;
+}
+
+@media (min-width: 769px) {
+  .audio-bar {
+    bottom: 20px;
+    right: 20px;
+  }
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.2); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Badge sentiment (shared) */
+.badge-sentiment {
+  font-size: 0.62rem;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.badge-positive {
+  background: rgba(16, 185, 129, 0.16);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.badge-negative {
+  background: rgba(244, 63, 94, 0.16);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.35);
+}
+.badge-neutral {
+  background: rgba(148, 163, 184, 0.16);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+

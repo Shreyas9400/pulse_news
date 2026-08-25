@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, Trash2, TrendingUp, Check } from 'lucide-react';
+import { X, Plus, TrendingUp, Check, Layers, BarChart2 } from 'lucide-react';
+import { getAvailableSectors, FULL_DIRECTORY, getTickerMeta } from '@/lib/stock-aliases';
 
 interface PortfolioModalProps {
   isOpen: boolean;
@@ -11,9 +12,14 @@ interface PortfolioModalProps {
   onRemoveSymbol: (symbol: string) => void;
 }
 
-const POPULAR_SUGGESTIONS = [
+const POPULAR_STOCKS = [
   'NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'AMD',
-  'PLTR', 'COIN', 'BTC-USD', 'ETH-USD', 'SPY', 'QQQ'
+  'AVGO', 'TSM', 'PLTR', 'CRWD', 'CRM', 'NFLX', 'COIN',
+  'BTC-USD', 'ETH-USD', 'SOL-USD', 'SPY', 'QQQ',
+];
+
+const POPULAR_SECTORS = [
+  'XLK', 'SMH', 'XLF', 'XLV', 'XBI', 'XLE', 'QCLN', 'CIBR', 'BOTZ', 'ITA', 'XLY',
 ];
 
 export default function PortfolioModal({
@@ -25,6 +31,7 @@ export default function PortfolioModal({
 }: PortfolioModalProps) {
   const [inputSymbol, setInputSymbol] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'stocks' | 'sectors'>('stocks');
 
   if (!isOpen) return null;
 
@@ -43,13 +50,23 @@ export default function PortfolioModal({
     setError(null);
   };
 
-  const handleSuggestionClick = (sym: string) => {
+  const handleToggle = (sym: string) => {
     if (portfolio.includes(sym)) {
       onRemoveSymbol(sym);
     } else {
       onAddSymbol(sym);
     }
   };
+
+  const stocksInPortfolio = portfolio.filter(s => {
+    const meta = getTickerMeta(s);
+    return !meta?.isSector;
+  });
+
+  const sectorsInPortfolio = portfolio.filter(s => {
+    const meta = getTickerMeta(s);
+    return meta?.isSector;
+  });
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -61,8 +78,10 @@ export default function PortfolioModal({
               <TrendingUp size={16} />
             </div>
             <div>
-              <h3 className="modal-title-serif">Manage Watchlist</h3>
-              <p className="modal-subtitle">Track custom stocks, crypto & industry leaders</p>
+              <h3 className="modal-title-serif">Manage Portfolio & Sectors</h3>
+              <p className="modal-subtitle">
+                Stocks, ETFs & sector trackers with alias-enhanced intelligence
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="btn-icon" title="Close" aria-label="Close">
@@ -75,7 +94,7 @@ export default function PortfolioModal({
           <input
             type="text"
             className="search-input portfolio-input"
-            placeholder="Enter Ticker Symbol (e.g. NVDA, AAPL, TSLA, BTC-USD)..."
+            placeholder="Enter any ticker (e.g. NVDA, XLK, BTC-USD, SMH)..."
             value={inputSymbol}
             onChange={(e) => {
               setInputSymbol(e.target.value);
@@ -91,50 +110,100 @@ export default function PortfolioModal({
 
         {error && <p className="form-error-msg">{error}</p>}
 
-        {/* Active Watchlist List */}
+        {/* Toggle Tabs: Stocks vs Sectors */}
+        <div className="portfolio-tabs">
+          <button
+            onClick={() => setActiveTab('stocks')}
+            className={`portfolio-tab ${activeTab === 'stocks' ? 'active' : ''}`}
+          >
+            <TrendingUp size={13} />
+            <span>Stocks & Crypto ({stocksInPortfolio.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('sectors')}
+            className={`portfolio-tab ${activeTab === 'sectors' ? 'active' : ''}`}
+          >
+            <BarChart2 size={13} />
+            <span>Sectors & ETFs ({sectorsInPortfolio.length})</span>
+          </button>
+        </div>
+
+        {/* Active Watchlist */}
         <div className="portfolio-watchlist-section">
-          <h4 className="section-label-sm">Active Watchlist ({portfolio.length})</h4>
-          {portfolio.length === 0 ? (
+          <h4 className="section-label-sm">
+            {activeTab === 'stocks' ? 'Active Stock Watchlist' : 'Tracked Sectors'}
+          </h4>
+
+          {(activeTab === 'stocks' ? stocksInPortfolio : sectorsInPortfolio).length === 0 ? (
             <div className="empty-box-sm">
-              Your watchlist is empty. Add symbols above or pick below.
+              {activeTab === 'stocks'
+                ? 'No stocks in watchlist yet. Add tickers above or pick from suggestions.'
+                : 'No sectors tracked yet. Add sector ETFs to monitor industry-level intelligence.'}
             </div>
           ) : (
             <div className="portfolio-chips-wrap">
-              {portfolio.map((symbol) => (
-                <div key={symbol} className="active-symbol-chip">
-                  <span>${symbol}</span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveSymbol(symbol)}
-                    className="chip-remove-btn"
-                    title={`Remove ${symbol}`}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
+              {(activeTab === 'stocks' ? stocksInPortfolio : sectorsInPortfolio).map((symbol) => {
+                const meta = getTickerMeta(symbol);
+                return (
+                  <div key={symbol} className="active-symbol-chip">
+                    <div className="chip-info">
+                      <span className="chip-symbol">${symbol}</span>
+                      {meta && <span className="chip-name">{meta.name}</span>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSymbol(symbol)}
+                      className="chip-remove-btn"
+                      title={`Remove ${symbol}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Popular Suggestions */}
+        {/* Suggestions Grid */}
         <div className="portfolio-suggestions-section">
-          <h4 className="section-label-sm">Market Movers (Tap to Toggle)</h4>
+          <h4 className="section-label-sm">
+            {activeTab === 'stocks' ? 'Popular Stocks & Crypto (Tap to Toggle)' : 'Available Sector Trackers (Tap to Toggle)'}
+          </h4>
           <div className="suggestions-grid">
-            {POPULAR_SUGGESTIONS.map((sym) => {
+            {(activeTab === 'stocks' ? POPULAR_STOCKS : POPULAR_SECTORS).map((sym) => {
               const inPortfolio = portfolio.includes(sym);
+              const meta = getTickerMeta(sym);
               return (
                 <button
                   key={sym}
                   type="button"
-                  onClick={() => handleSuggestionClick(sym)}
-                  className={`suggestion-chip ${inPortfolio ? 'active' : ''}`}
+                  onClick={() => handleToggle(sym)}
+                  className={`suggestion-chip-detailed ${inPortfolio ? 'active' : ''}`}
+                  title={meta?.aliases.slice(0, 3).join(', ')}
                 >
-                  {inPortfolio && <Check size={11} />}
-                  <span>${sym}</span>
+                  <div className="suggestion-chip-top">
+                    {inPortfolio && <Check size={11} />}
+                    <span className="suggestion-symbol">${sym}</span>
+                  </div>
+                  {meta && (
+                    <span className="suggestion-name">{meta.name}</span>
+                  )}
+                  {meta && (
+                    <span className="suggestion-industry">{meta.industry}</span>
+                  )}
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* Alias Info Box */}
+        <div className="alias-info-box">
+          <Layers size={14} />
+          <div>
+            <strong>Smart Search Integration</strong>
+            <p>Every entity auto-generates Boolean search queries using aliases, CEO names, product lines, and sector keywords for comprehensive news coverage.</p>
           </div>
         </div>
       </div>

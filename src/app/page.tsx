@@ -1,22 +1,27 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Header from '@/components/Header';
 import BreakingTicker from '@/components/BreakingTicker';
 import ChannelFilter from '@/components/ChannelFilter';
 import BriefingHero from '@/components/BriefingHero';
-import PortfolioOverview from '@/components/PortfolioOverview';
+import PortfolioOverview, { PortfolioEntitySummary } from '@/components/PortfolioOverview';
 import NewsCard from '@/components/NewsCard';
 import ReaderModal from '@/components/ReaderModal';
 import PortfolioModal from '@/components/PortfolioModal';
 import NotificationModal from '@/components/NotificationModal';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types';
-import { Sparkles, AlertCircle, RefreshCw, VolumeX, Plus, Wallet, Bell } from 'lucide-react';
+import { getTickerMeta, buildEnhancedSearchQuery } from '@/lib/stock-aliases';
+import { RefreshCw, VolumeX } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
 
 const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD'];
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
+
+// Auto-refresh intervals (milliseconds)
+const QUOTE_REFRESH_INTERVAL = 45_000;    // 45 seconds for live stock prices
+const NEWS_REFRESH_INTERVAL = 5 * 60_000; // 5 minutes for portfolio news feed
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -39,6 +44,9 @@ export default function HomePage() {
 
   // Audio Speech state
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Track last news refresh timestamp to prevent duplicate calls
+  const lastNewsRefreshRef = useRef<number>(0);
 
   // Load bookmarks and portfolio from local storage on mount
   useEffect(() => {
@@ -100,6 +108,7 @@ export default function HomePage() {
     targetPortfolio?: string[]
   ) => {
     setIsRefreshingNews(true);
+    lastNewsRefreshRef.current = Date.now();
 
     try {
       let url = `/api/news?category=${cat}`;
@@ -142,16 +151,28 @@ export default function HomePage() {
     }
   }, []);
 
-  // Initial load
+  // Initial load + Auto-refresh intervals for BOTH quotes AND news
   useEffect(() => {
     fetchLiveQuotes();
     fetchNews('portfolio', '', null);
     fetchBriefing();
 
     // Auto-refresh live stock quotes every 45 seconds
-    const quoteInterval = setInterval(() => fetchLiveQuotes(), 45000);
-    return () => clearInterval(quoteInterval);
-  }, [fetchLiveQuotes, fetchNews, fetchBriefing]);
+    const quoteInterval = setInterval(() => fetchLiveQuotes(), QUOTE_REFRESH_INTERVAL);
+
+    // Auto-refresh portfolio news every 5 minutes (no manual sync needed!)
+    const newsInterval = setInterval(() => {
+      // Only auto-refresh if we're on portfolio tab and not actively searching
+      if (!searchQuery && !selectedStockFilter) {
+        fetchNews('portfolio', '', null);
+      }
+    }, NEWS_REFRESH_INTERVAL);
+
+    return () => {
+      clearInterval(quoteInterval);
+      clearInterval(newsInterval);
+    };
+  }, [fetchLiveQuotes, fetchNews, fetchBriefing, searchQuery, selectedStockFilter]);
 
   // Handle Category selection
   const handleSelectCategory = (cat: CategoryId) => {
@@ -211,6 +232,7 @@ export default function HomePage() {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
     
+    // Immediately sync live quotes AND news for the new portfolio
     fetchLiveQuotes(updated);
     fetchNews('portfolio', '', null, updated);
   };
@@ -257,6 +279,69 @@ export default function HomePage() {
       setIsSpeaking(false);
     }
   };
+
+  // =========================================================================
+  //  COMPUTE PER-ENTITY NEWS SUMMARIES WITH SENTIMENT
+  // =========================================================================
+  const entitySummaries: PortfolioEntitySummary[] = useMemo(() => {
+    if (!articles || articles.length === 0) return [];
+
+    return portfolio.map((symbol) => {
+      const meta = getTickerMeta(symbol);
+      const searchTerms = meta
+        ? [symbol.toLowerCase(), meta.name.toLowerCase(), ...meta.aliases.map(a => a.toLowerCase())]
+        : [symbol.toLowerCase()];
+
+      // Find articles that mention this entity
+      const matchingArticles = articles.filter((article) => {
+        const textToSearch = `${article.title} ${article.description} ${article.source}`.toLowerCase();
+        return searchTerms.some(term => textToSearch.includes(term));
+      });
+
+      if (matchingArticles.length === 0) {
+        return {
+          symbol,
+          sentiment: 'neutral' as const,
+          headline: 'No recent news coverage detected.',
+          newsCount: 0,
+        };
+      }
+
+      // Compute aggregate sentiment from matched articles
+      let posCount = 0;
+      let negCount = 0;
+      matchingArticles.forEach((a) => {
+        if (a.sentiment === 'positive') posCount++;
+        else if (a.sentiment === 'negative') negCount++;
+      });
+
+      let aggregateSentiment: 'positive' | 'neutral' | 'negative' = 'neutral';
+      if (posCount > negCount && posCount >= 2) aggregateSentiment = 'positive';
+      else if (negCount > posCount && negCount >= 2) aggregateSentiment = 'negative';
+      else if (posCount > negCount) aggregateSentiment = 'positive';
+      else if (negCount > posCount) aggregateSentiment = 'negative';
+
+      // Keyword-based sentiment boost from headline text
+      const latestTitle = matchingArticles[0].title.toLowerCase();
+      const positiveSignals = ['surge', 'rally', 'record', 'beat', 'upgrade', 'bullish', 'strong', 'growth', 'gains', 'profit', 'outperform', 'innovation'];
+      const negativeSignals = ['drop', 'crash', 'plunge', 'miss', 'downgrade', 'bearish', 'weak', 'loss', 'decline', 'warning', 'layoff', 'recall', 'lawsuit', 'probe'];
+
+      const hasPosSig = positiveSignals.some(s => latestTitle.includes(s));
+      const hasNegSig = negativeSignals.some(s => latestTitle.includes(s));
+
+      if (hasPosSig && !hasNegSig) aggregateSentiment = 'positive';
+      if (hasNegSig && !hasPosSig) aggregateSentiment = 'negative';
+
+      return {
+        symbol,
+        sentiment: aggregateSentiment,
+        headline: matchingArticles[0].title.length > 90
+          ? matchingArticles[0].title.substring(0, 87) + '...'
+          : matchingArticles[0].title,
+        newsCount: matchingArticles.length,
+      };
+    });
+  }, [articles, portfolio]);
 
   const userPortfolioQuotes = stockQuotes.filter(q => portfolio.includes(q.symbol));
   const displayedArticles = activeCategory === 'saved' ? savedArticles : articles;
@@ -325,6 +410,7 @@ export default function HomePage() {
             onRefreshQuotes={() => fetchLiveQuotes()}
             isLoadingQuotes={isLoadingQuotes}
             onRemoveSymbol={handleRemoveSymbol}
+            entitySummaries={entitySummaries}
           />
         )}
 
@@ -359,7 +445,7 @@ export default function HomePage() {
               {selectedStockFilter
                 ? `Boolean query feeds & Yahoo Finance articles for ${selectedStockFilter}`
                 : activeCategory === 'portfolio'
-                ? `Auto-synced across ${portfolio.join(', ')} via Yahoo Finance & Boolean query wires`
+                ? `Auto-synced across ${portfolio.length} assets • News refreshes every 5 min`
                 : `${displayedArticles.length} stories reported • Continuous monitoring`}
             </p>
           </div>
