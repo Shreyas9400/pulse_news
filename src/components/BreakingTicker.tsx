@@ -10,20 +10,19 @@ interface BreakingTickerProps {
 }
 
 export default function BreakingTicker({ quotes, onOpenPortfolio }: BreakingTickerProps) {
-  // If quotes are empty, show fallback indices while loading
   const displayQuotes = quotes.length > 0 ? quotes : [];
   const loopItems = [...displayQuotes, ...displayQuotes];
 
   return (
-    <div className="ticker-wrapper" aria-label="Real-Time Yahoo Finance Ticker">
+    <div className="ticker-wrapper" aria-label="Real-Time Market Ticker">
       <button
         onClick={onOpenPortfolio}
         className="ticker-badge-btn"
-        title="Click to edit your Portfolio Watchlist"
+        title="Customize Portfolio"
       >
         <span className="ticker-live-dot" />
-        <span>PORTFOLIO</span>
-        <Edit3 size={11} style={{ opacity: 0.8 }} />
+        <span className="ticker-badge-text">PORTFOLIO</span>
+        <Edit3 size={11} className="ticker-edit-icon" />
       </button>
 
       <div className="ticker-track">
@@ -36,7 +35,6 @@ export default function BreakingTicker({ quotes, onOpenPortfolio }: BreakingTick
             className="ticker-item"
           >
             <span className="ticker-symbol">${item.symbol}</span>
-            <span className="ticker-name">({item.shortName})</span>
             <span className="ticker-val">{item.formattedPrice}</span>
             <span
               className={`ticker-change-badge ${
@@ -44,9 +42,9 @@ export default function BreakingTicker({ quotes, onOpenPortfolio }: BreakingTick
               }`}
             >
               {item.isPositive ? (
-                <TrendingUp size={11} />
+                <TrendingUp size={10} />
               ) : (
-                <TrendingDown size={11} />
+                <TrendingDown size={10} />
               )}
               {item.formattedChange}
             </span>

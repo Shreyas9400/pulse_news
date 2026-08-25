@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { StockQuote } from '@/lib/types';
-import { TrendingUp, TrendingDown, Plus, RefreshCw, X, Sparkles, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, RefreshCw, X } from 'lucide-react';
 
 interface PortfolioOverviewProps {
   quotes: StockQuote[];
@@ -25,7 +25,6 @@ export default function PortfolioOverview({
 }: PortfolioOverviewProps) {
   if (quotes.length === 0) return null;
 
-  // Calculate average portfolio daily performance
   const validQuotes = quotes.filter(q => q.price > 0);
   const avgChange = validQuotes.length > 0
     ? validQuotes.reduce((acc, q) => acc + q.changePercent, 0) / validQuotes.length
@@ -34,35 +33,35 @@ export default function PortfolioOverview({
 
   return (
     <section className="portfolio-dashboard-panel" aria-label="Portfolio Overview">
-      {/* Panel Header */}
+      {/* Header */}
       <div className="portfolio-panel-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="portfolio-header-main">
           <div className="portfolio-icon-badge">
-            <TrendingUp size={18} />
+            <TrendingUp size={16} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h2 className="portfolio-title">Live Portfolio & Watchlist</h2>
+            <div className="portfolio-title-row">
+              <h2 className="portfolio-title">My Tracked Portfolio</h2>
               <span className={`portfolio-avg-badge ${isPortfolioPositive ? 'positive' : 'negative'}`}>
-                {isPortfolioPositive ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                <span>{isPortfolioPositive ? '+' : ''}{avgChange.toFixed(2)}% Today</span>
+                {isPortfolioPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                <span>{isPortfolioPositive ? '+' : ''}{avgChange.toFixed(2)}%</span>
               </span>
             </div>
             <p className="portfolio-subtitle">
-              Real-time quotes via Yahoo Finance • Click any asset to filter tailored news
+              Live Yahoo Finance quotes • Tap asset to filter news wire
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="portfolio-actions-row">
           <button
             onClick={onRefreshQuotes}
             disabled={isLoadingQuotes}
             className="btn-portfolio-action"
-            title="Refresh Live Prices"
+            title="Sync Live Prices"
           >
-            <RefreshCw size={14} style={{ animation: isLoadingQuotes ? 'spin 1s linear infinite' : 'none' }} />
-            <span>Sync Quotes</span>
+            <RefreshCw size={13} style={{ animation: isLoadingQuotes ? 'spin 1s linear infinite' : 'none' }} />
+            <span>Sync</span>
           </button>
 
           <button
@@ -70,7 +69,7 @@ export default function PortfolioOverview({
             className="btn-portfolio-primary"
             title="Add or remove stocks"
           >
-            <Plus size={15} />
+            <Plus size={14} />
             <span>Add Asset</span>
           </button>
         </div>
@@ -88,12 +87,12 @@ export default function PortfolioOverview({
               className={`portfolio-card ${isSelected ? 'selected' : ''}`}
             >
               <div className="portfolio-card-top">
-                <div>
-                  <div className="portfolio-card-symbol">${quote.symbol}</div>
-                  <div className="portfolio-card-name">{quote.shortName}</div>
+                <div className="portfolio-sym-wrap">
+                  <span className="portfolio-card-symbol">${quote.symbol}</span>
+                  <span className="portfolio-card-name">{quote.shortName}</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div className="portfolio-chip-wrap">
                   <span className={`portfolio-change-chip ${quote.isPositive ? 'positive' : 'negative'}`}>
                     {quote.isPositive ? '+' : ''}{quote.changePercent.toFixed(2)}%
                   </span>
@@ -105,8 +104,9 @@ export default function PortfolioOverview({
                     }}
                     className="portfolio-remove-btn"
                     title={`Remove ${quote.symbol}`}
+                    aria-label={`Remove ${quote.symbol}`}
                   >
-                    <X size={12} />
+                    <X size={13} />
                   </button>
                 </div>
               </div>
@@ -115,14 +115,13 @@ export default function PortfolioOverview({
               <div className="portfolio-card-middle">
                 <div className="portfolio-card-price">{quote.formattedPrice}</div>
                 
-                {/* SVG Mini Sparkline */}
                 {quote.sparkline && quote.sparkline.length > 2 && (
-                  <svg className="sparkline-svg" viewBox="0 0 60 20" preserveAspectRatio="none">
+                  <svg className="sparkline-svg" viewBox="0 0 54 18" preserveAspectRatio="none">
                     <polyline
                       fill="none"
                       stroke={quote.isPositive ? '#10b981' : '#f43f5e'}
                       strokeWidth="2"
-                      points={generateSparklinePoints(quote.sparkline, 60, 20)}
+                      points={generateSparklinePoints(quote.sparkline, 54, 18)}
                     />
                   </svg>
                 )}
@@ -131,7 +130,7 @@ export default function PortfolioOverview({
               {/* Day High / Low */}
               {quote.high && quote.low && (
                 <div className="portfolio-card-range">
-                  <span>L: ${quote.low.toFixed(2)}</span>
+                  <span>L: ${quote.low.toFixed(1)}</span>
                   <div className="range-track">
                     <div
                       className="range-fill"
@@ -141,7 +140,7 @@ export default function PortfolioOverview({
                       }}
                     />
                   </div>
-                  <span>H: ${quote.high.toFixed(2)}</span>
+                  <span>H: ${quote.high.toFixed(1)}</span>
                 </div>
               )}
             </div>

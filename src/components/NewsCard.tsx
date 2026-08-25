@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { NewsArticle } from '@/lib/types';
-import { Bookmark, ExternalLink, Sparkles, BookOpen, Clock, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { Bookmark, ExternalLink, Sparkles, BookOpen, Clock, Share2 } from 'lucide-react';
 
 interface NewsCardProps {
   article: NewsArticle;
@@ -17,13 +17,11 @@ export default function NewsCard({
   isSaved,
   onToggleSave,
   onOpenReader,
-  onPlayAudio,
 }: NewsCardProps) {
   const [showAiSummary, setShowAiSummary] = useState(false);
   const [imgSrc, setImgSrc] = useState<string | null>(article.imageUrl || null);
   const [copied, setCopied] = useState(false);
 
-  // Time format helper
   const getTimeAgo = (timestamp: number) => {
     const diff = Math.floor((Date.now() - timestamp) / 1000);
     if (diff < 60) return 'Just now';
@@ -42,7 +40,7 @@ export default function NewsCard({
           url: article.link,
         });
       } catch {
-        // ignore cancel
+        // user cancelled share
       }
     } else {
       navigator.clipboard.writeText(article.link);
@@ -63,34 +61,14 @@ export default function NewsCard({
             loading="lazy"
             onError={() => setImgSrc(null)}
           />
-          <div
-            style={{
-              position: 'absolute',
-              top: 12,
-              left: 12,
-              display: 'flex',
-              gap: 6,
-            }}
-          >
+          <div className="card-image-badges">
             {article.sentiment && (
               <span className={`badge-sentiment badge-${article.sentiment}`}>
                 {article.sentiment}
               </span>
             )}
             {article.stockTicker && (
-              <span
-                style={{
-                  background: 'rgba(0,0,0,0.75)',
-                  backdropFilter: 'blur(6px)',
-                  color: '#38bdf8',
-                  padding: '2px 8px',
-                  borderRadius: 20,
-                  fontSize: '0.72rem',
-                  fontFamily: 'var(--font-mono)',
-                  fontWeight: 700,
-                  border: '1px solid rgba(56, 189, 248, 0.4)',
-                }}
-              >
+              <span className="card-ticker-pill">
                 ${article.stockTicker.symbol}
               </span>
             )}
@@ -105,9 +83,9 @@ export default function NewsCard({
             <span>{article.sourceIcon || '📰'}</span>
             <span>{article.source}</span>
           </span>
-          <span className="card-time" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={12} />
-            {getTimeAgo(article.timestamp)}
+          <span className="card-time">
+            <Clock size={11} />
+            <span>{getTimeAgo(article.timestamp)}</span>
           </span>
         </div>
 
@@ -127,93 +105,69 @@ export default function NewsCard({
 
         {/* AI Quick Takeaway Accordion */}
         {showAiSummary && (
-          <div
-            style={{
-              background: 'rgba(99, 102, 241, 0.08)',
-              border: '1px solid rgba(99, 102, 241, 0.25)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '12px 14px',
-              marginBottom: 14,
-              fontSize: '0.82rem',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                color: '#a5b4fc',
-                fontWeight: 700,
-                fontSize: '0.75rem',
-                marginBottom: 6,
-                textTransform: 'uppercase',
-              }}
-            >
+          <div className="card-ai-box">
+            <div className="card-ai-title">
               <Sparkles size={13} />
-              <span>AI Takeaway</span>
+              <span>AI Intelligence Take</span>
             </div>
-            <ul style={{ paddingLeft: 18, margin: 0, lineHeight: 1.4 }}>
+            <ul className="card-ai-list">
               <li>Core event: {article.title}</li>
-              <li>Source reporting from {article.source} in {article.category} channel.</li>
-              <li>Estimated read time: ~2 minutes.</li>
+              <li>Source reporting: {article.source} ({article.category})</li>
+              <li>Estimated read time: ~2 minutes</li>
             </ul>
           </div>
         )}
 
         {/* Footer Actions */}
         <div className="card-footer">
-          <div className="card-actions">
-            {/* AI Summary Toggle */}
+          <div className="card-actions-left">
             <button
               onClick={() => setShowAiSummary(!showAiSummary)}
-              className="btn-read"
-              title="Toggle AI Quick Summary"
+              className={`btn-read ${showAiSummary ? 'active' : ''}`}
+              title="Toggle AI Brief"
             >
-              <Sparkles size={13} />
-              <span>{showAiSummary ? 'Hide AI Take' : 'AI Take'}</span>
+              <Sparkles size={12} />
+              <span>{showAiSummary ? 'Hide Take' : 'AI Take'}</span>
             </button>
 
-            {/* Reader Mode */}
             <button
               onClick={() => onOpenReader(article)}
-              className="btn-read"
-              style={{ background: 'rgba(6, 182, 212, 0.1)', borderColor: 'rgba(6, 182, 212, 0.3)', color: '#38bdf8' }}
-              title="Open distraction-free reader"
+              className="btn-read btn-read-primary"
+              title="Open full reader mode"
             >
-              <BookOpen size={13} />
+              <BookOpen size={12} />
               <span>Reader</span>
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {/* Share */}
+          <div className="card-actions-right">
             <button
               onClick={handleShare}
-              className="btn-icon"
+              className="btn-icon-sm"
               title={copied ? 'Link copied!' : 'Share article'}
+              aria-label="Share article"
             >
-              <Share2 size={15} />
+              <Share2 size={14} />
             </button>
 
-            {/* Bookmark */}
             <button
               onClick={() => onToggleSave(article)}
-              className={`btn-icon ${isSaved ? 'active' : ''}`}
-              title={isSaved ? 'Remove Bookmark' : 'Save for later'}
+              className={`btn-icon-sm ${isSaved ? 'active' : ''}`}
+              title={isSaved ? 'Remove Bookmark' : 'Save article'}
+              aria-label="Bookmark article"
             >
-              <Bookmark size={15} />
+              <Bookmark size={14} />
             </button>
 
-            {/* Original Link */}
             <a
               href={article.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-icon"
-              title="Visit source website"
+              className="btn-icon-sm"
+              title="Open original publisher"
+              aria-label="Open source link"
             >
-              <ExternalLink size={15} />
+              <ExternalLink size={14} />
             </a>
           </div>
         </div>

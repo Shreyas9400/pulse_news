@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Sun, Moon, Sparkles, RefreshCw, Bookmark, Bell } from 'lucide-react';
+import { Search, Sun, Moon, Sparkles, RefreshCw, Bookmark, Bell, X } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -37,7 +37,7 @@ export default function Header({
     const now = new Date();
     setCurrentDateStr(
       now.toLocaleDateString('en-US', {
-        weekday: 'long',
+        weekday: 'short',
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -54,50 +54,46 @@ export default function Header({
 
   return (
     <header className="masthead-container">
-      {/* Top Editorial Sub-bar (WSJ/FT Style) */}
+      {/* Top Editorial Sub-bar */}
       <div className="masthead-topbar">
-        <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', letterSpacing: '0.04em' }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <span style={{ fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-              {currentDateStr || 'Today'}
-            </span>
+        <div className="container masthead-topbar-inner">
+          <div className="topbar-left">
+            <span className="topbar-date">{currentDateStr || 'Today'}</span>
             <span className="edition-badge">GLOBAL EDITION</span>
           </div>
 
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <span style={{ color: 'var(--text-muted)' }}>PWA & FCM Protocol Live</span>
+          <div className="topbar-right">
+            <button
+              onClick={onOpenNotifications}
+              className="topbar-link-btn"
+              title="Push Notification Settings"
+            >
+              <Bell size={13} />
+              <span className="hide-on-mobile-sm">Alerts</span>
+            </button>
+            <span className="topbar-separator">•</span>
+            <span className="topbar-protocol">PWA Live</span>
           </div>
         </div>
       </div>
 
-      {/* Primary Masthead & Logo */}
-      <div className="container masthead-main">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 16 }}>
-          {/* Masthead Title */}
+      {/* Primary Masthead */}
+      <div className="container masthead-main-layout">
+        {/* Brand & Action Controls Row */}
+        <div className="masthead-row-top">
           <a href="/" className="masthead-brand">
             <h1 className="masthead-title">FINANCIAL PULSE</h1>
-            <span className="masthead-tagline">Real-Time Market Intelligence & Portfolio Wire</span>
+            <span className="masthead-tagline">Real-Time Market & Portfolio Intelligence</span>
           </a>
 
-          {/* Search Bar */}
-          <form onSubmit={onSearchSubmit} className="search-wrapper">
-            <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Search companies, ticker symbols, executives (e.g. NVDA, TSLA, AI)..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-          </form>
-
-          {/* Actions & Utilities */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Notification Bell (FCM) */}
+          {/* Desktop & Mobile Top Actions */}
+          <div className="masthead-actions">
+            {/* Notification Bell */}
             <button
               onClick={onOpenNotifications}
               className="btn-icon"
-              title="Push Notification Settings"
+              title="Push Notifications"
+              aria-label="Push Notifications"
             >
               <Bell size={17} />
             </button>
@@ -106,7 +102,8 @@ export default function Header({
             <button
               onClick={onShowSaved}
               className={`btn-icon ${activeCategory === 'saved' ? 'active' : ''}`}
-              title="Saved Reading List"
+              title="Saved Articles"
+              aria-label="Saved Articles"
               style={{ position: 'relative' }}
             >
               <Bookmark size={17} />
@@ -121,6 +118,7 @@ export default function Header({
               disabled={isRefreshing}
               className="btn-icon"
               title="Sync Live Feeds"
+              aria-label="Sync Live Feeds"
             >
               <RefreshCw
                 size={17}
@@ -128,11 +126,12 @@ export default function Header({
               />
             </button>
 
-            {/* Theme toggle */}
+            {/* Theme Toggle */}
             <button
               onClick={cycleTheme}
               className="btn-icon"
-              title={`Theme: ${theme.toUpperCase()} (Click to toggle)`}
+              title={`Theme: ${theme.toUpperCase()}`}
+              aria-label="Toggle Theme"
             >
               {theme === 'dark' ? (
                 <Moon size={17} />
@@ -144,6 +143,28 @@ export default function Header({
             </button>
           </div>
         </div>
+
+        {/* Search Bar Form */}
+        <form onSubmit={onSearchSubmit} className="masthead-search-form">
+          <Search size={16} className="search-icon" />
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search stocks, companies, topics (e.g. NVDA, TSLA, AI)..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => onSearchChange('')}
+              className="search-clear-btn"
+              title="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </form>
       </div>
     </header>
   );
