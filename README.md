@@ -6,7 +6,7 @@ A modern, high-performance daily news aggregator and AI executive digest designe
 
 ## 🌟 Key Features
 
-1. **Continuous Real-Time Monitoring**:
+1. **Continuous Real-Time News Monitoring**:
    - **Yahoo Finance & Stock Tickers**: Live market movers, S&P 500, Nasdaq, Dow Jones, Nvidia, Apple, and crypto.
    - **Multi-Source RSS Aggregation**: Google News RSS, BBC, Reuters, TechCrunch, The Verge, Hacker News, and Science feeds.
    - **Dynamic Topic & Keyword Search**: Generates custom RSS streams on the fly for any company, person, or theme.
