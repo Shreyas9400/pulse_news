@@ -238,7 +238,11 @@ export async function getAggregatedNews({
   if (category === 'portfolio' && stockSymbols && stockSymbols.length > 0) {
     const portfolioKeywords = stockSymbols.flatMap((s) => {
       const meta = getTickerMeta(s);
-      return [s.toLowerCase(), (meta?.name || '').toLowerCase(), ...(meta?.aliases || []).map((a) => a.toLowerCase())].filter((k) => k.length > 1);
+      return [
+        s.toLowerCase(),
+        (meta?.name || '').toLowerCase(),
+        ...(meta?.aliases || []).map((a) => a.toLowerCase()),
+      ].filter((k) => k.length > 1);
     });
 
     const relevantArticles = allArticles.filter((a) => {
@@ -251,18 +255,56 @@ export async function getAggregatedNews({
     }
   }
 
-  // Deduplicate by title
-  const seenTitles = new Set<string>();
+  // Advanced Semantic Deduplication Layer (Jaccard + Normalized Fingerprint)
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'for', 'on', 'with', 'is', 'as', 'at', 'by', 'from', 'says', 'amid', 'new', 'after']);
   const deduplicated: NewsArticle[] = [];
 
   for (const article of allArticles) {
-    const key = article.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '')
-      .slice(0, 40);
+    if (!article.title || article.title.length < 10) continue;
 
-    if (!seenTitles.has(key) && article.title.length > 10) {
-      seenTitles.add(key);
+    // Tokenize title words for semantic overlap comparison
+    const words = new Set(
+      article.title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .split(/\s+/)
+        .filter((w) => w.length > 2 && !stopWords.has(w))
+    );
+
+    let isDuplicate = false;
+    for (const existing of deduplicated) {
+      const existingWords = new Set(
+        existing.title
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .split(/\s+/)
+          .filter((w) => w.length > 2 && !stopWords.has(w))
+      );
+
+      // Compute Jaccard word set similarity
+      let intersection = 0;
+      words.forEach((w) => {
+        if (existingWords.has(w)) intersection++;
+      });
+      const union = new Set([...words, ...existingWords]).size;
+      const similarity = union > 0 ? intersection / union : 0;
+
+      // Also check exact normalized prefix
+      const key1 = article.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 35);
+      const key2 = existing.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 35);
+
+      if (similarity > 0.55 || key1 === key2) {
+        isDuplicate = true;
+        // If current article has richer description, replace the existing one
+        if (article.description && article.description.length > (existing.description?.length || 0)) {
+          const idx = deduplicated.indexOf(existing);
+          if (idx !== -1) deduplicated[idx] = article;
+        }
+        break;
+      }
+    }
+
+    if (!isDuplicate) {
       deduplicated.push(article);
     }
   }

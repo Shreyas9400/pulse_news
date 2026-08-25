@@ -6,6 +6,7 @@ import BreakingTicker from '@/components/BreakingTicker';
 import ChannelFilter from '@/components/ChannelFilter';
 import BriefingHero from '@/components/BriefingHero';
 import PortfolioOverview, { PortfolioEntitySummary } from '@/components/PortfolioOverview';
+import NewsFilterBar from '@/components/NewsFilterBar';
 import NewsCard from '@/components/NewsCard';
 import ReaderModal from '@/components/ReaderModal';
 import PortfolioModal from '@/components/PortfolioModal';
@@ -34,6 +35,11 @@ export default function HomePage() {
   const [selectedStockFilter, setSelectedStockFilter] = useState<string | null>(null);
   const [isRefreshingNews, setIsRefreshingNews] = useState(false);
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
+
+  // News Board Filter Bar state
+  const [newsEntityFilter, setNewsEntityFilter] = useState<string>('ALL');
+  const [newsSentimentFilter, setNewsSentimentFilter] = useState<'ALL' | 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'>('ALL');
+  const [newsSortBy, setNewsSortBy] = useState<'newest' | 'sentiment' | 'relevance'>('newest');
   
   // Local storage state
   const [savedArticles, setSavedArticles] = useState<NewsArticle[]>([]);
@@ -194,6 +200,8 @@ export default function HomePage() {
     setActiveCategory(cat);
     setSearchQuery('');
     setSelectedStockFilter(null);
+    setNewsEntityFilter('ALL');
+    setNewsSentimentFilter('ALL');
     if (cat !== 'saved') {
       fetchNews(cat, '', null);
     }
@@ -203,9 +211,11 @@ export default function HomePage() {
   const handleSelectStockFilter = (symbol: string) => {
     if (!symbol) {
       setSelectedStockFilter(null);
+      setNewsEntityFilter('ALL');
       fetchNews(activeCategory, searchQuery, null);
     } else {
       setSelectedStockFilter(symbol);
+      setNewsEntityFilter(symbol);
       fetchNews('markets', '', symbol);
     }
   };
@@ -214,6 +224,7 @@ export default function HomePage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSelectedStockFilter(null);
+    setNewsEntityFilter('ALL');
     if (searchQuery.trim()) {
       fetchNews('all', searchQuery.toUpperCase(), null);
     } else {
@@ -336,16 +347,6 @@ export default function HomePage() {
       if (posCount > negCount) aggregateSentiment = 'positive';
       else if (negCount > posCount) aggregateSentiment = 'negative';
 
-      const latestTitle = matchingArticles[0].title.toLowerCase();
-      const positiveSignals = ['surge', 'rally', 'record', 'beat', 'upgrade', 'bullish', 'strong', 'growth', 'gains', 'profit', 'outperform'];
-      const negativeSignals = ['drop', 'crash', 'plunge', 'miss', 'downgrade', 'bearish', 'weak', 'loss', 'decline', 'warning', 'layoff', 'lawsuit'];
-
-      const hasPosSig = positiveSignals.some((s) => latestTitle.includes(s));
-      const hasNegSig = negativeSignals.some((s) => latestTitle.includes(s));
-
-      if (hasPosSig && !hasNegSig) aggregateSentiment = 'positive';
-      if (hasNegSig && !hasPosSig) aggregateSentiment = 'negative';
-
       return {
         symbol,
         sentiment: aggregateSentiment,
@@ -358,7 +359,54 @@ export default function HomePage() {
   }, [articles, portfolio]);
 
   const userPortfolioQuotes = stockQuotes.filter((q) => portfolio.includes(q.symbol));
-  const displayedArticles = activeCategory === 'saved' ? savedArticles : articles;
+  const rawDisplayedArticles = activeCategory === 'saved' ? savedArticles : articles;
+
+  // Filtered & Sorted Articles
+  const filteredArticles = useMemo(() => {
+    let list = [...rawDisplayedArticles];
+
+    // 1. Filter by Entity (if selected)
+    if (newsEntityFilter !== 'ALL') {
+      const meta = getTickerMeta(newsEntityFilter);
+      const searchTerms = [
+        newsEntityFilter.toLowerCase(),
+        (meta?.name || '').toLowerCase(),
+        ...(meta?.aliases || []).map((a) => a.toLowerCase()),
+      ].filter((t) => t.length > 1);
+
+      list = list.filter((article) => {
+        const text = `${article.title} ${article.description} ${article.source}`.toLowerCase();
+        return searchTerms.some((t) => text.includes(t));
+      });
+    }
+
+    // 2. Filter by Sentiment (if selected)
+    if (newsSentimentFilter !== 'ALL') {
+      list = list.filter((article) => {
+        const s = (article.sentiment || 'neutral').toUpperCase();
+        return s === newsSentimentFilter;
+      });
+    }
+
+    // 3. Sorting
+    if (newsSortBy === 'sentiment') {
+      const priority: Record<string, number> = { negative: 1, positive: 2, neutral: 3 };
+      list.sort((a, b) => (priority[a.sentiment || 'neutral'] || 3) - (priority[b.sentiment || 'neutral'] || 3));
+    } else if (newsSortBy === 'relevance') {
+      list.sort((a, b) => (b.description?.length || 0) - (a.description?.length || 0));
+    } else {
+      list.sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    return list;
+  }, [rawDisplayedArticles, newsEntityFilter, newsSentimentFilter, newsSortBy]);
+
+  const handleResetFilters = () => {
+    setNewsEntityFilter('ALL');
+    setNewsSentimentFilter('ALL');
+    setNewsSortBy('newest');
+    setSelectedStockFilter(null);
+  };
 
   // Header title generator
   const getChannelHeading = () => {
@@ -446,7 +494,7 @@ export default function HomePage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            margin: '18px 0 20px 0',
+            margin: '18px 0 12px 0',
             flexWrap: 'wrap',
             gap: 10,
             borderBottom: '1px solid var(--border-subtle)',
@@ -462,7 +510,7 @@ export default function HomePage() {
                 ? `BOOLEAN QUERY FEEDS & NEWS FOR ${selectedStockFilter}`
                 : activeCategory === 'portfolio'
                 ? `AUTO-SYNCED ACROSS ${portfolio.length} ASSETS & SECTORS • NEWS REFRESHTIME: 5 MIN`
-                : `${displayedArticles.length} STORIES REPORTED • CONTINUOUS MONITORING`}
+                : `${filteredArticles.length} STORIES REPORTED • CONTINUOUS MONITORING`}
             </p>
           </div>
 
@@ -507,24 +555,47 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Top News Filter Bar (Filter by Entity, Sentiment, Sort) */}
+        <NewsFilterBar
+          portfolioSymbols={portfolio}
+          selectedEntityFilter={newsEntityFilter}
+          onSelectEntityFilter={setNewsEntityFilter}
+          selectedSentimentFilter={newsSentimentFilter}
+          onSelectSentimentFilter={setNewsSentimentFilter}
+          sortBy={newsSortBy}
+          onSelectSortBy={setNewsSortBy}
+          totalCount={rawDisplayedArticles.length}
+          filteredCount={filteredArticles.length}
+          onResetFilters={handleResetFilters}
+        />
+
         {/* Empty / Loading State */}
-        {isRefreshingNews && displayedArticles.length === 0 ? (
+        {isRefreshingNews && filteredArticles.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', color: 'var(--accent-gold)' }} />
             <p style={{ fontSize: '1rem', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>FETCHING LIVE INTELLIGENCE WIRE...</p>
           </div>
-        ) : displayedArticles.length === 0 ? (
+        ) : filteredArticles.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', margin: '20px 0 60px' }}>
             <p style={{ fontSize: '1.05rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-secondary)' }}>
               {activeCategory === 'saved'
                 ? 'NO SAVED ARTICLES YET. BOOKMARK ARTICLES TO READ THEM ANYTIME.'
-                : 'NO RECENT HEADLINES FOUND FOR THIS SECTOR OR PORTFOLIO.'}
+                : 'NO RECENT HEADLINES MATCHING YOUR FILTER CRITERIA.'}
             </p>
+            {(newsEntityFilter !== 'ALL' || newsSentimentFilter !== 'ALL') && (
+              <button
+                onClick={handleResetFilters}
+                className="btn-portfolio-action"
+                style={{ marginTop: 12 }}
+              >
+                RESET FILTERS TO VIEW ALL
+              </button>
+            )}
           </div>
         ) : (
           /* Newspaper Style Editorial Grid */
           <div className="news-grid">
-            {displayedArticles.map((article) => (
+            {filteredArticles.map((article) => (
               <NewsCard
                 key={article.id}
                 article={article}
