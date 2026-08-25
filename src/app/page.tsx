@@ -17,7 +17,6 @@ import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types'
 import { getTickerMeta, isSectorEntity, TickerMetadata } from '@/lib/stock-aliases';
 import { RefreshCw, VolumeX } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
-import { syncPortfolioToFirebase, loadPortfolioFromFirebase } from '@/lib/firestore-sync';
 
 const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD', 'SEMICONDUCTORS', 'AI_CLOUD'];
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
@@ -74,14 +73,6 @@ export default function HomePage() {
           setPortfolio(parsed);
         }
       }
-
-      // Check Firestore cloud for synced portfolio
-      loadPortfolioFromFirebase().then((cloudData) => {
-        if (cloudData && Array.isArray(cloudData.portfolio) && cloudData.portfolio.length > 0) {
-          setPortfolio(cloudData.portfolio);
-          localStorage.setItem('pulse_user_portfolio', JSON.stringify(cloudData.portfolio));
-        }
-      }).catch(() => {});
     } catch {
       // ignore
     }
@@ -257,9 +248,6 @@ export default function HomePage() {
     try {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
-    
-    // Sync to Firebase Firestore cloud
-    syncPortfolioToFirebase({ portfolio: updated });
 
     // Immediately sync live quotes AND news for the new portfolio
     fetchLiveQuotes(updated);
@@ -272,9 +260,6 @@ export default function HomePage() {
     try {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
-    
-    // Sync to Firebase Firestore cloud
-    syncPortfolioToFirebase({ portfolio: updated });
 
     fetchLiveQuotes(updated);
     fetchNews('portfolio', '', null, updated);

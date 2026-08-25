@@ -1,5 +1,5 @@
-// Progressive Web App Service Worker with Stale-Chunk Protection
-const CACHE_NAME = 'pulsenews-v2';
+// Progressive Web App Service Worker with Safe Caching
+const CACHE_NAME = 'pulsenews-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -21,9 +21,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // 1. Only GET requests are cacheable. Bypass any POST/PUT/DELETE requests immediately!
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   const url = event.request.url;
 
-  // 1. Always Network-First for HTML navigation and API endpoints to prevent stale chunk errors
+  // 2. Always Network-First for HTML navigation and API endpoints to prevent stale chunk errors
   if (event.request.mode === 'navigate' || url.includes('/api/')) {
     event.respondWith(
       fetch(event.request)
@@ -37,7 +42,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Network-First for _next/static to immediately load newly deployed chunks
+  // 3. Network-First for _next/static to immediately load newly deployed chunks
   if (url.includes('/_next/')) {
     event.respondWith(
       fetch(event.request)
@@ -53,7 +58,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Stale-while-revalidate for images and icons
+  // 4. Stale-while-revalidate for images, icons, fonts (GET only)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
