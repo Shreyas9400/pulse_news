@@ -71,3 +71,16 @@ export interface CategoryTab {
   icon: string;
   badge?: string;
 }
+
+export interface SecFiling {
+  accessionNumber: string;
+  filingDate: string;
+  reportDate: string;
+  form: string;
+  primaryDocument: string;
+  primaryDocDescription: string;
+  documentUrl: string;
+  size: number;
+  creditRiskTakeaway?: string;
+}
+

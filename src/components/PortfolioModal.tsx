@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, TrendingUp, Check, BarChart2, Tag, Building2, Search, Zap } from 'lucide-react';
+import { X, Plus, TrendingUp, Check, BarChart2, Tag, Building2, Search, Zap, FileText } from 'lucide-react';
 import { SECTOR_DIRECTORY, getTickerMeta, saveCustomMetadata, TickerMetadata } from '@/lib/stock-aliases';
+import { DEFAULT_CIK_DIRECTORY } from '@/lib/sec-edgar';
 
 interface PortfolioModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export default function PortfolioModal({
   // Stock inputs
   const [stockSymbol, setStockSymbol] = useState('');
   const [stockName, setStockName] = useState('');
+  const [stockCik, setStockCik] = useState('');
   const [stockAliases, setStockAliases] = useState('');
 
   // Sector inputs (Pure Name — No Ticker)
@@ -42,7 +44,19 @@ export default function PortfolioModal({
 
   if (!isOpen) return null;
 
-  // Add Stock (with Ticker + Name + Aliases)
+  // Auto-fill CIK when user types ticker symbol
+  const handleSymbolChange = (val: string) => {
+    const clean = val.toUpperCase();
+    setStockSymbol(clean);
+    setError(null);
+
+    // Auto-populate CIK if found in directory and CIK is empty
+    if (DEFAULT_CIK_DIRECTORY[clean] && !stockCik) {
+      setStockCik(DEFAULT_CIK_DIRECTORY[clean]);
+    }
+  };
+
+  // Add Stock (with Ticker + Name + CIK + Aliases)
   const handleAddStock = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = stockSymbol.trim().toUpperCase();
@@ -61,12 +75,15 @@ export default function PortfolioModal({
       .map((a) => a.trim().toUpperCase())
       .filter(Boolean);
 
-    const customMeta: Partial<TickerMetadata> = {
+    const resolvedCik = stockCik.trim() || DEFAULT_CIK_DIRECTORY[clean] || '';
+
+    const customMeta: Partial<TickerMetadata & { cik?: string }> = {
       symbol: clean,
       name: (stockName.trim() || clean).toUpperCase(),
       aliases: aliasesList,
-      industry: 'EQUITIES',
+      industry: 'EQUITIES & FIXED INCOME',
       isSector: false,
+      ...(resolvedCik ? { cik: resolvedCik } : {}),
     };
 
     saveCustomMetadata(clean, customMeta);
@@ -74,6 +91,7 @@ export default function PortfolioModal({
 
     setStockSymbol('');
     setStockName('');
+    setStockCik('');
     setStockAliases('');
     setError(null);
   };
@@ -143,9 +161,9 @@ export default function PortfolioModal({
               <TrendingUp size={16} />
             </div>
             <div>
-              <h3 className="modal-title-serif">MANAGE PORTFOLIO & SECTOR TRACKERS</h3>
+              <h3 className="modal-title-serif">PORTFOLIO & SEC FILINGS CIK MANAGER</h3>
               <p className="modal-subtitle">
-                ADD EQUITIES WITH TICKERS OR TRACK PURE INDUSTRY SECTORS (NO TICKER REQUIRED)
+                TRACK US FIXED INCOME ISSUERS (WITH SEC CIK FOR 10-K/10-Q/8-K) OR INDUSTRY SECTORS
               </p>
             </div>
           </div>
@@ -165,7 +183,7 @@ export default function PortfolioModal({
             className={`portfolio-tab ${activeTab === 'stocks' ? 'active' : ''}`}
           >
             <TrendingUp size={13} />
-            <span>STOCKS & CRYPTO ({stocksInPortfolio.length})</span>
+            <span>ISSUERS & STOCKS ({stocksInPortfolio.length})</span>
           </button>
           <button
             type="button"
@@ -180,7 +198,7 @@ export default function PortfolioModal({
           </button>
         </div>
 
-        {/* Form Mode 1: Stocks (Ticker + Name + Aliases) */}
+        {/* Form Mode 1: Stocks (Ticker + Name + SEC CIK + Aliases) */}
         {activeTab === 'stocks' ? (
           <form onSubmit={handleAddStock} className="portfolio-detailed-form">
             <div className="form-fields-grid">
@@ -193,12 +211,9 @@ export default function PortfolioModal({
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. NVDA, AAPL, BTC-USD"
+                  placeholder="E.G. NVDA, JPM, AAPL, MSFT"
                   value={stockSymbol}
-                  onChange={(e) => {
-                    setStockSymbol(e.target.value.toUpperCase());
-                    setError(null);
-                  }}
+                  onChange={(e) => handleSymbolChange(e.target.value)}
                   autoFocus
                 />
               </div>
@@ -207,7 +222,7 @@ export default function PortfolioModal({
               <div className="form-field-group">
                 <label className="form-field-label">
                   <Building2 size={12} />
-                  <span>COMPANY NAME</span>
+                  <span>ISSUER / COMPANY NAME</span>
                 </label>
                 <input
                   type="text"
@@ -218,33 +233,51 @@ export default function PortfolioModal({
                 />
               </div>
 
-              {/* Aliases */}
-              <div className="form-field-group full-width">
+              {/* SEC CIK (Crucial for 10-K/10-Q EDGAR Credit Filings) */}
+              <div className="form-field-group">
                 <label className="form-field-label">
-                  <Search size={12} />
-                  <span>SEARCH ALIASES & BOOLEAN OPERATORS (COMMA SEPARATED)</span>
+                  <FileText size={12} color="var(--accent-gold)" />
+                  <span>SEC CIK NUMBER (FOR 10-K / 10-Q / 8-K FILINGS)</span>
                 </label>
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. JENSEN HUANG, BLACKWELL GPU, GEFORCE, AI CHIPS"
+                  placeholder="E.G. 0001045810 (AUTO-RESOLVED IF BLANK)"
+                  value={stockCik}
+                  onChange={(e) => setStockCik(e.target.value.toUpperCase())}
+                />
+                <span className="form-field-hint">
+                  Used to fetch SEC EDGAR debt disclosures, 10-K balance sheets, 10-Q cash flows, and 8-K material credit events.
+                </span>
+              </div>
+
+              {/* Aliases */}
+              <div className="form-field-group">
+                <label className="form-field-label">
+                  <Search size={12} />
+                  <span>SEARCH ALIASES & BOOLEAN OPERATORS</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input portfolio-input"
+                  placeholder="E.G. JENSEN HUANG, BLACKWELL GPU, AI CHIPS"
                   value={stockAliases}
                   onChange={(e) => setStockAliases(e.target.value.toUpperCase())}
                 />
                 <span className="form-field-hint">
-                  AUTO-SYNCS BOOLEAN SEARCH QUERIES TO PULL RECENT HEADLINES ACROSS ALL ALIASES.
+                  Auto-syncs Boolean search queries to pull recent credit intelligence.
                 </span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
               <button
                 type="submit"
                 className="btn-portfolio-primary"
                 style={{ padding: '0 20px', height: 42, fontSize: '0.85rem' }}
               >
                 <Plus size={15} />
-                <span>ADD TO STOCKS WATCHLIST</span>
+                <span>ADD ISSUER TO WATCHLIST</span>
               </button>
             </div>
           </form>
@@ -261,7 +294,7 @@ export default function PortfolioModal({
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. SEMICONDUCTORS, AI & CLOUD, QUANTUM COMPUTING"
+                  placeholder="E.G. SEMICONDUCTORS, US FIXED INCOME, US BANKING"
                   value={sectorName}
                   onChange={(e) => {
                     setSectorName(e.target.value.toUpperCase());
@@ -280,12 +313,12 @@ export default function PortfolioModal({
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. CHIPS, FAB CAPACITY, WAFER, FOUNDRY, SUPPLY CHAIN"
+                  placeholder="E.G. CHIPS, FAB CAPACITY, TREASURIES, CREDIT SPREADS"
                   value={sectorAliases}
                   onChange={(e) => setSectorAliases(e.target.value.toUpperCase())}
                 />
                 <span className="form-field-hint">
-                  SEARCH QUERIES WILL AGGREGATE ALL INDUSTRY & THEMATIC ARTICLES FOR THIS SECTOR.
+                  SEARCH QUERIES WILL AGGREGATE ALL INDUSTRY & THEMATIC CREDIT DISPATCHES.
                 </span>
               </div>
             </div>
@@ -309,14 +342,14 @@ export default function PortfolioModal({
         <div className="portfolio-watchlist-section">
           <h4 className="section-label-sm">
             {activeTab === 'stocks'
-              ? `ACTIVE STOCKS & CRYPTO (${stocksInPortfolio.length})`
+              ? `ACTIVE ISSUERS & STOCKS (${stocksInPortfolio.length})`
               : `TRACKED SECTORS (${sectorsInPortfolio.length})`}
           </h4>
 
           {(activeTab === 'stocks' ? stocksInPortfolio : sectorsInPortfolio).length === 0 ? (
             <div className="empty-box-sm">
               {activeTab === 'stocks'
-                ? 'NO STOCKS ADDED YET. ADD CUSTOM TICKERS ABOVE OR PICK FROM SUGGESTIONS.'
+                ? 'NO ISSUERS ADDED YET. ADD CUSTOM TICKERS/CIK ABOVE OR PICK FROM SUGGESTIONS.'
                 : 'NO SECTORS ADDED YET. ADD INDUSTRY NAMES ABOVE (E.G. SEMICONDUCTORS) OR SELECT PRESETS BELOW.'}
             </div>
           ) : (
@@ -348,7 +381,7 @@ export default function PortfolioModal({
         {/* Suggestions Grid */}
         <div className="portfolio-suggestions-section">
           <h4 className="section-label-sm">
-            {activeTab === 'stocks' ? 'POPULAR STOCKS & CRYPTO (TAP TO TOGGLE)' : 'CORE INDUSTRY SECTORS (TAP TO TOGGLE)'}
+            {activeTab === 'stocks' ? 'CORE US ISSUERS & LIQUID EQUITIES (TAP TO TOGGLE)' : 'CORE INDUSTRY SECTORS (TAP TO TOGGLE)'}
           </h4>
           <div className="suggestions-grid">
             {(activeTab === 'stocks' ? POPULAR_STOCKS : PRESET_SECTORS).map((sym) => {

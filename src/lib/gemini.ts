@@ -1,7 +1,9 @@
 import { NewsArticle, DailyBriefing } from './types';
 
 /**
- * Generate a smart AI executive daily briefing from top news items
+ * Generate an AI Senior Credit Risk Analyst & Fixed Income Daily Briefing
+ * Persona: Experienced Senior Credit Risk Analyst agnostic to sector, evaluating
+ * liquidity, debt serviceability, leverage, yield spreads, and material SEC disclosures.
  */
 export async function generateDailyBriefing(articles: NewsArticle[]): Promise<DailyBriefing> {
   const topArticles = articles.slice(0, 8);
@@ -13,25 +15,32 @@ export async function generateDailyBriefing(articles: NewsArticle[]): Promise<Da
   });
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+  const greeting = hour < 12 ? 'CREDIT RISK BRIEFING (MORNING)' : hour < 18 ? 'CREDIT RISK BRIEFING (MIDDAY)' : 'CREDIT RISK BRIEFING (CLOSE)';
 
-  // If Gemini API Key is configured in environment, we can fetch real Gemini briefing
+  // If Gemini API Key is configured in environment
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
   if (apiKey && topArticles.length > 0) {
     try {
-      const prompt = `You are an elite executive intelligence editor. Generate a concise, engaging morning executive briefing based on these top news headlines:
+      const prompt = `You are a Veteran Senior Credit Risk Analyst & US Fixed Income Strategist. Sector-agnostic.
+Your analytical lens evaluates:
+1. Debt serviceability, interest coverage ratios, leverage, and cash flow stability.
+2. Refinancing risk, maturity walls, and credit rating migration triggers.
+3. Macro rate environment (Treasury yield curve, Fed policy rate, IG/HY credit spreads).
+4. Materiality of corporate news and SEC regulatory disclosures on debt obligations and counterparty risk.
+
+Review these current intelligence items:
 ${topArticles.map((a, i) => `${i + 1}. [${a.source} - ${a.category}] ${a.title}: ${a.description}`).join('\n')}
 
-Format your response as strict JSON:
+Generate a rigorous, institutional-grade Credit Risk Executive Briefing formatted as strict JSON:
 {
-  "overview": "A 2-3 sentence overarching executive summary connecting the major market, tech, and global narratives today.",
-  "marketMood": "Bullish / Cautious Optimism / Volatile / Neutral with 1 short explanatory sentence",
+  "overview": "A 2-3 sentence credit risk synopsis analyzing macro fixed income conditions, corporate liquidity buffers, and default/spread materiality across market sectors.",
+  "marketMood": "Credit Environment: e.g. Spread Tightening (Low Default Risk) / Defensive (Spread Widening Risk) / Volatile (Refinancing Pressures) with 1 sentence rationale.",
   "keyBulletPoints": [
-    "Punchy high-impact bullet 1",
-    "Punchy high-impact bullet 2",
-    "Punchy high-impact bullet 3",
-    "Punchy high-impact bullet 4"
+    "Credit Risk Takeaway 1: Focus on cash flow & debt impact",
+    "Credit Risk Takeaway 2: Focus on liquidity or regulatory disclosure",
+    "Credit Risk Takeaway 3: Focus on macro rate / yield spread implications",
+    "Credit Risk Takeaway 4: Focus on counterparty or covenant health"
   ]
 }`;
 
@@ -55,57 +64,53 @@ Format your response as strict JSON:
           return {
             date: dateStr,
             greeting,
-            overview: parsed.overview || 'Markets and technology sectors lead headlines today.',
-            marketMood: parsed.marketMood || 'Market sentiments show steady momentum.',
+            overview: parsed.overview || 'US Fixed Income & Corporate Credit risk monitoring remains active across corporate balance sheets and Treasury yield curves.',
+            marketMood: parsed.marketMood || 'Credit Spreads: Stable with disciplined corporate liquidity monitoring.',
             topStories: topArticles.slice(0, 5),
-            keyBulletPoints: parsed.keyBulletPoints || topArticles.slice(0, 4).map(a => a.title),
+            keyBulletPoints: parsed.keyBulletPoints || topArticles.slice(0, 4).map((a) => `Credit Assessment: ${a.title}`),
             generatedAt: new Date().toISOString(),
           };
         }
       }
     } catch (e) {
-      console.warn('[GeminiBriefing] Fallback to smart local synthesizer:', e);
+      console.warn('[GeminiCreditBriefing] Fallback to credit risk local synthesizer:', e);
     }
   }
 
-  // Fast Intelligent Local Synthesizer (Zero API Keys required!)
-  const topTitles = topArticles.slice(0, 4).map(a => a.title);
-  const positiveCount = topArticles.filter(a => a.sentiment === 'positive').length;
-  const negativeCount = topArticles.filter(a => a.sentiment === 'negative').length;
+  // Institutional Local Credit Risk Synthesizer (Zero API keys needed)
+  const positiveCount = topArticles.filter((a) => a.sentiment === 'positive').length;
+  const negativeCount = topArticles.filter((a) => a.sentiment === 'negative').length;
 
-  let mood = 'Balanced & Cautious';
-  if (positiveCount > negativeCount + 1) mood = 'Bullish Optimism — Tech & markets rally';
-  else if (negativeCount > positiveCount) mood = 'Risk-Off & Defensive — Geopolitical & market caution';
+  let mood = 'Credit Spreads Neutral — Balanced Refinancing & Coverage Metrics';
+  if (positiveCount > negativeCount + 1) {
+    mood = 'Tightening Credit Spreads — Strong Balance Sheet Liquidity & Robust Cash Flow';
+  } else if (negativeCount > positiveCount) {
+    mood = 'Widening Spread Risk — Elevated Leverage & Refinancing Sensitivity';
+  }
 
   return {
     date: dateStr,
     greeting,
-    overview: `Today's briefing captures active developments across global markets, frontier AI, and business. High-impact updates from ${[...new Set(topArticles.map(a => a.source))].slice(0, 3).join(', ')} highlight ongoing momentum.`,
+    overview: `Senior Credit Risk Monitor: Active surveillance across US Fixed Income, debt issuance, and liquidity buffers. Recent reporting from ${[...new Set(topArticles.map((a) => a.source))].slice(0, 3).join(', ')} highlights corporate cash flow durability and macro yield sensitivity.`,
     marketMood: mood,
     topStories: topArticles.slice(0, 5),
     keyBulletPoints: [
-      `${topArticles[0]?.title || 'Markets open with focused investor interest.'}`,
-      `${topArticles[1]?.title || 'Technology and computing sectors report key advancements.'}`,
-      `${topArticles[2]?.title || 'Global macroeconomic indicators remain closely watched.'}`,
-      `${topArticles[3]?.title || 'Scientific and enterprise research milestones announced today.'}`,
+      `Liquidity & Cash Flow: ${topArticles[0]?.title || 'Corporate cash balances remain adequate against near-term debt maturities.'}`,
+      `Macro Rate Sensitivity: ${topArticles[1]?.title || 'Treasury yield curve dynamics and Fed terminal rate expectations influence refinancing costs.'}`,
+      `Material Disclosures & Filings: ${topArticles[2]?.title || 'Surveillance on interim 10-Q/10-K covenant headroom and credit facility amendments.'}`,
+      `Credit Rating & Default Risk: ${topArticles[3]?.title || 'Evaluating investment grade and high yield spread differentials across monitored issuers.'}`,
     ],
     generatedAt: new Date().toISOString(),
   };
 }
 
 /**
- * Generate 3 bullet executive summary for an individual article
+ * Generate 3 bullet credit risk analyst takeaway for an individual article/event
  */
 export function summarizeArticleLocally(title: string, description: string): string[] {
-  const sentences = description.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 15);
-  
-  if (sentences.length >= 3) {
-    return sentences.slice(0, 3);
-  }
-  
   return [
-    `Key Focus: ${title}`,
-    description || 'Full coverage and updates available via primary publisher.',
-    'Impact: Relevant for tracking current sector trends and market movements.',
+    `CREDIT IMPACT: ${title}`,
+    `LIQUIDITY & SPREAD EFFECT: ${description || 'Monitored for corporate debt serviceability, free cash flow generation, and balance sheet leverage.'}`,
+    'MATERIALITY: Sector-agnostic credit risk surveillance on covenant compliance and rating migration.',
   ];
 }
