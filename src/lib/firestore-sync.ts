@@ -1,19 +1,33 @@
 /**
  * Firebase Firestore Cloud Sync for Portfolio & Custom Metadata
- * Keeps your watchlist, custom aliases, and bookmarks synced to your pulsenews Firebase database.
+ * Graceful cloud persistence with auto-fallback to localStorage.
  */
 
-import { getFirestore, doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
-import { getFirebaseApp } from './firebase';
+let isFirestoreAvailable: boolean | null = null;
 
-let db: Firestore | null = null;
+/**
+ * Checks if Firestore is available and initialized in the Firebase project.
+ * If not provisioned, gracefully falls back without console spam.
+ */
+async function getDb() {
+  if (typeof window === 'undefined') return null;
+  if (isFirestoreAvailable === false) return null;
 
-async function getDb(): Promise<Firestore | null> {
-  if (db) return db;
-  const app = await getFirebaseApp();
-  if (!app) return null;
-  db = getFirestore(app);
-  return db;
+  try {
+    const { getFirebaseApp } = await import('./firebase');
+    const app = await getFirebaseApp();
+    if (!app) {
+      isFirestoreAvailable = false;
+      return null;
+    }
+
+    const { getFirestore } = await import('firebase/firestore');
+    const db = getFirestore(app);
+    return db;
+  } catch {
+    isFirestoreAvailable = false;
+    return null;
+  }
 }
 
 function getDeviceId(): string {
@@ -27,19 +41,20 @@ function getDeviceId(): string {
 }
 
 /**
- * Syncs portfolio, custom aliases, and custom sectors to Firebase Firestore
+ * Syncs portfolio and metadata to Firestore (if provisioned)
  */
 export async function syncPortfolioToFirebase(data: {
   portfolio: string[];
   customMetadata?: any;
   savedArticles?: any[];
 }): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || isFirestoreAvailable === false) return false;
 
   try {
     const firestore = await getDb();
     if (!firestore) return false;
 
+    const { doc, setDoc } = await import('firebase/firestore');
     const deviceId = getDeviceId();
     const docRef = doc(firestore, 'pulsenews_portfolios', deviceId);
 
@@ -50,41 +65,44 @@ export async function syncPortfolioToFirebase(data: {
         customMetadata: data.customMetadata || null,
         savedArticlesCount: data.savedArticles?.length || 0,
         updatedAt: new Date().toISOString(),
-        userAgent: navigator.userAgent,
       },
       { merge: true }
     );
 
+    isFirestoreAvailable = true;
     return true;
-  } catch (e) {
-    console.warn('[FirestoreSync] Cloud sync skipped (offline or credentials pending):', e);
+  } catch {
+    // If Firestore database '(default)' does not exist in Firebase console, mark unavailable to prevent retry loops
+    isFirestoreAvailable = false;
     return false;
   }
 }
 
 /**
- * Loads cloud portfolio from Firebase Firestore
+ * Loads cloud portfolio from Firestore (if provisioned)
  */
 export async function loadPortfolioFromFirebase(): Promise<{
   portfolio?: string[];
   customMetadata?: any;
 } | null> {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || isFirestoreAvailable === false) return null;
 
   try {
     const firestore = await getDb();
     if (!firestore) return null;
 
+    const { doc, getDoc } = await import('firebase/firestore');
     const deviceId = getDeviceId();
     const docRef = doc(firestore, 'pulsenews_portfolios', deviceId);
     const snap = await getDoc(docRef);
 
     if (snap.exists()) {
+      isFirestoreAvailable = true;
       return snap.data() as any;
     }
     return null;
-  } catch (e) {
-    console.warn('[FirestoreSync] Could not fetch cloud portfolio:', e);
+  } catch {
+    isFirestoreAvailable = false;
     return null;
   }
 }
