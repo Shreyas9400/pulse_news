@@ -7,17 +7,37 @@ import { TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react';
 interface BreakingTickerProps {
   tickers: StockTickerItem[];
   breakingHeadlines?: string[];
+  onOpenPortfolio?: () => void;
 }
 
-export default function BreakingTicker({ tickers, breakingHeadlines = [] }: BreakingTickerProps) {
+export default function BreakingTicker({ tickers, breakingHeadlines = [], onOpenPortfolio }: BreakingTickerProps) {
   // Duplicate array to enable infinite seamless CSS loop
   const loopItems = [...tickers, ...tickers];
 
   return (
     <div className="ticker-wrapper" aria-label="Stock & Market Ticker">
-      <div style={{ padding: '0 16px', background: 'var(--accent-primary)', color: '#fff', fontSize: '0.75rem', fontWeight: 800, height: '100%', display: 'flex', alignItems: 'center', zIndex: 2, letterSpacing: '0.05em' }}>
-        MARKETS
-      </div>
+      <button
+        onClick={onOpenPortfolio}
+        style={{
+          padding: '0 14px',
+          background: 'linear-gradient(135deg, var(--accent-primary), #06b6d4)',
+          color: '#fff',
+          fontSize: '0.72rem',
+          fontWeight: 800,
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          zIndex: 2,
+          letterSpacing: '0.05em',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+        title="Click to customize your Portfolio / Watchlist"
+      >
+        <span>MARKETS</span>
+        <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.25)', padding: '1px 5px', borderRadius: 4 }}>+ EDIT</span>
+      </button>
       <div className="ticker-track">
         {loopItems.map((item, idx) => (
           <a

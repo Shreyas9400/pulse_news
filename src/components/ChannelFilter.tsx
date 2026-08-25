@@ -2,16 +2,18 @@
 
 import React from 'react';
 import { CategoryId, CategoryTab } from '@/lib/types';
-import { Sparkles, TrendingUp, Cpu, Globe, Briefcase, Atom, Bookmark, Layers } from 'lucide-react';
+import { Sparkles, TrendingUp, Cpu, Globe, Briefcase, Atom, Bookmark, Layers, Wallet } from 'lucide-react';
 
 interface ChannelFilterProps {
   activeCategory: CategoryId;
   onSelectCategory: (id: CategoryId) => void;
   savedCount: number;
+  portfolioCount?: number;
 }
 
 const CATEGORIES: { id: CategoryId; label: string; icon: any }[] = [
   { id: 'all', label: 'Top Headlines', icon: Layers },
+  { id: 'portfolio', label: '💼 My Portfolio', icon: Wallet },
   { id: 'markets', label: 'Yahoo Finance & Markets', icon: TrendingUp },
   { id: 'ai', label: 'AI & Frontier Tech', icon: Sparkles },
   { id: 'tech', label: 'Tech & Startups', icon: Cpu },

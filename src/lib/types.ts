@@ -42,6 +42,7 @@ export interface DailyBriefing {
 
 export type CategoryId =
   | 'all'
+  | 'portfolio'
   | 'markets'
   | 'tech'
   | 'ai'
@@ -56,3 +57,4 @@ export interface CategoryTab {
   icon: string;
   badge?: string;
 }
+
