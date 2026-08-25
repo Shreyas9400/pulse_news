@@ -1,16 +1,7 @@
-// Progressive Web App Service Worker
-const CACHE_NAME = 'pulsenews-v1';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/manifest.json',
-];
+// Progressive Web App Service Worker with Stale-Chunk Protection
+const CACHE_NAME = 'pulsenews-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
   self.skipWaiting();
 });
 
@@ -30,18 +21,50 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network-first strategy for dynamic news and stock API requests
-  if (event.request.url.includes('/api/')) {
+  const url = event.request.url;
+
+  // 1. Always Network-First for HTML navigation and API endpoints to prevent stale chunk errors
+  if (event.request.mode === 'navigate' || url.includes('/api/')) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request)
+        .then((response) => {
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request) || caches.match('/');
+        })
     );
     return;
   }
 
-  // Cache-first with network fallback for static assets
+  // 2. Network-First for _next/static to immediately load newly deployed chunks
+  if (url.includes('/_next/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 3. Stale-while-revalidate for images and icons
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request);
+    caches.match(event.request).then((cached) => {
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const copy = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return networkResponse;
+      }).catch(() => null);
+
+      return cached || fetchPromise;
     })
   );
 });
