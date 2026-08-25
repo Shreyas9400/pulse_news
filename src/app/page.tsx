@@ -75,8 +75,13 @@ export default function HomePage() {
     }
   }, [portfolio]);
 
-  // Fetch News and Briefing
-  const fetchNews = useCallback(async (cat: CategoryId = 'portfolio', query: string = '', stockFilter?: string | null) => {
+  // Fetch News with Enhanced Boolean Operator Support
+  const fetchNews = useCallback(async (
+    cat: CategoryId = 'portfolio',
+    query: string = '',
+    stockFilter?: string | null,
+    targetPortfolio?: string[]
+  ) => {
     setIsRefreshingNews(true);
 
     try {
@@ -85,8 +90,8 @@ export default function HomePage() {
       if (stockFilter) {
         url = `/api/news?category=markets&symbols=${encodeURIComponent(stockFilter)}`;
       } else if (cat === 'portfolio') {
-        const activeSymbols = portfolio.length > 0 ? portfolio : DEFAULT_PORTFOLIO;
-        url = `/api/news?category=markets&symbols=${encodeURIComponent(activeSymbols.join(','))}`;
+        const activeSymbols = targetPortfolio || (portfolio.length > 0 ? portfolio : DEFAULT_PORTFOLIO);
+        url = `/api/news?category=portfolio&symbols=${encodeURIComponent(activeSymbols.join(','))}`;
       } else if (query.trim()) {
         url = `/api/news?q=${encodeURIComponent(query.trim())}`;
       }
@@ -180,7 +185,7 @@ export default function HomePage() {
     }
   };
 
-  // Portfolio Management
+  // Portfolio Management with Immediate Live Auto-Sync
   const handleAddSymbol = (sym: string) => {
     const clean = sym.toUpperCase();
     const updated = [...new Set([...portfolio, clean])];
@@ -188,10 +193,10 @@ export default function HomePage() {
     try {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
+    
+    // Auto-sync quotes & news immediately for the updated portfolio
     fetchLiveQuotes(updated);
-    if (activeCategory === 'portfolio') {
-      fetchNews('portfolio', '', null);
-    }
+    fetchNews('portfolio', '', null, updated);
   };
 
   const handleRemoveSymbol = (sym: string) => {
@@ -200,10 +205,9 @@ export default function HomePage() {
     try {
       localStorage.setItem('pulse_user_portfolio', JSON.stringify(updated));
     } catch {}
+    
     fetchLiveQuotes(updated);
-    if (activeCategory === 'portfolio') {
-      fetchNews('portfolio', '', null);
-    }
+    fetchNews('portfolio', '', null, updated);
   };
 
   // Audio Speech Synthesis Handler
@@ -238,9 +242,28 @@ export default function HomePage() {
     }
   };
 
-  // Separate user portfolio quotes from broad market indices
   const userPortfolioQuotes = stockQuotes.filter(q => portfolio.includes(q.symbol));
   const displayedArticles = activeCategory === 'saved' ? savedArticles : articles;
+
+  // Header title generator
+  const getChannelHeading = () => {
+    if (activeCategory === 'saved') return 'Saved Articles & Reading List';
+    if (selectedStockFilter) return `Tailored Intelligence Wire: $${selectedStockFilter}`;
+    if (searchQuery) return `Search Results for "${searchQuery}"`;
+    if (activeCategory === 'portfolio') return '💼 Curated News for Your Portfolio (Auto-Synced)';
+    if (activeCategory === 'industry-chips') return '⚡ Semiconductor & Chip Industry Wire';
+    if (activeCategory === 'industry-ai-cloud') return '🧠 AI & Cloud Infrastructure Intelligence';
+    if (activeCategory === 'industry-ev') return '🚗 EV, Clean Energy & Battery Sector';
+    if (activeCategory === 'industry-fintech') return '💳 Fintech, Banking & Macroeconomic Radar';
+    if (activeCategory === 'industry-biotech') return '🧬 Biotech, Pharma & Clinical Trials';
+    if (activeCategory === 'industry-cyber') return '🛡️ Cybersecurity & Defense Technology';
+    if (activeCategory === 'markets') return '📈 Yahoo Finance & Stock Market Movers';
+    if (activeCategory === 'tech') return '💻 Tech Trends & Silicon Valley';
+    if (activeCategory === 'world') return '🌐 Global Geopolitics & World Headlines';
+    if (activeCategory === 'business') return '🏛️ Business, Trade & Economy';
+    if (activeCategory === 'science') return '🔬 Science, Space & Breakthroughs';
+    return 'Real-Time Top Stories';
+  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -267,7 +290,7 @@ export default function HomePage() {
       />
 
       <main className="container" style={{ flex: 1, paddingTop: 20 }}>
-        {/* Channel Navigation Pills */}
+        {/* Channel Navigation Pills with Industry Sectors */}
         <ChannelFilter
           activeCategory={activeCategory}
           onSelectCategory={handleSelectCategory}
@@ -311,33 +334,13 @@ export default function HomePage() {
         >
           <div>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>
-              {activeCategory === 'saved'
-                ? 'Saved Articles & Reading List'
-                : selectedStockFilter
-                ? `Tailored Headlines for $${selectedStockFilter}`
-                : activeCategory === 'portfolio'
-                ? '💼 Curated News for Your Portfolio'
-                : searchQuery
-                ? `Search Results for "${searchQuery}"`
-                : activeCategory === 'markets'
-                ? 'Yahoo Finance & Market Movers'
-                : activeCategory === 'ai'
-                ? 'Frontier AI & Machine Learning'
-                : activeCategory === 'tech'
-                ? 'Tech Trends & Silicon Valley'
-                : activeCategory === 'world'
-                ? 'Global Geopolitics & World News'
-                : activeCategory === 'business'
-                ? 'Business, Trade & Economy'
-                : activeCategory === 'science'
-                ? 'Science, Space & Innovation'
-                : 'Real-Time Top Stories'}
+              {getChannelHeading()}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
               {selectedStockFilter
-                ? `Showing latest developments regarding ${selectedStockFilter}`
+                ? `Using Boolean search operators & Yahoo Finance feeds for ${selectedStockFilter}`
                 : activeCategory === 'portfolio'
-                ? `Aggregated live across ${portfolio.join(', ')} via Yahoo Finance`
+                ? `Auto-synced across ${portfolio.join(', ')} using company aliases & search operators`
                 : `${displayedArticles.length} stories synced • Real-time live feeds`}
             </p>
           </div>
@@ -400,7 +403,7 @@ export default function HomePage() {
                 color: 'var(--accent-primary)',
               }}
             />
-            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Aggregating live news and market intelligence...</p>
+            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Aggregating live news and industry intelligence...</p>
           </div>
         ) : displayedArticles.length === 0 ? (
           <div
@@ -511,7 +514,7 @@ export default function HomePage() {
             <strong>PulseNews</strong> • Real-Time AI News & Portfolio Intelligence Terminal
           </div>
           <div>
-            Continuous Yahoo Finance Stream • Deployable to Vercel
+            Search Operators & Boolean Feed Engine • Deployable to Vercel
           </div>
         </div>
       </footer>

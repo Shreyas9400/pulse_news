@@ -2,6 +2,7 @@ import Parser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { NewsArticle, StockQuote, StockTickerItem } from './types';
 import { RSS_SOURCES, getCustomSearchRssUrl, getYahooStockRssUrl, RssSource } from './rss-sources';
+import { buildEnhancedSearchQuery, buildPortfolioCombinedQuery } from './stock-aliases';
 
 const parser = new Parser({
   timeout: 10000,
@@ -163,15 +164,36 @@ export async function getAggregatedNews(options?: {
       },
     ];
   } else if (stockSymbols && stockSymbols.length > 0) {
-    sourcesToFetch = [
-      {
-        id: 'yahoo-custom-stocks',
-        name: 'Yahoo Finance Stocks',
-        url: getYahooStockRssUrl(stockSymbols),
-        category: 'markets',
-        icon: '📈',
-      },
-    ];
+    // 1. Yahoo Finance RSS for the symbols
+    sourcesToFetch.push({
+      id: 'yahoo-custom-stocks',
+      name: 'Yahoo Finance Portfolio',
+      url: getYahooStockRssUrl(stockSymbols),
+      category: 'portfolio',
+      icon: '📈',
+      isFinancialTicker: true,
+    });
+
+    // 2. Enhanced Boolean Search Operator Feed combining company aliases & executive names
+    if (stockSymbols.length === 1) {
+      const enhancedQuery = buildEnhancedSearchQuery(stockSymbols[0]);
+      sourcesToFetch.push({
+        id: `enhanced-query-${encodeURIComponent(stockSymbols[0])}`,
+        name: `${stockSymbols[0]} Intelligence Wire`,
+        url: getCustomSearchRssUrl(enhancedQuery),
+        category: 'portfolio',
+        icon: '⚡',
+      });
+    } else {
+      const combinedPortfolioQuery = buildPortfolioCombinedQuery(stockSymbols);
+      sourcesToFetch.push({
+        id: 'portfolio-combined-wire',
+        name: 'Portfolio Intelligence Wire',
+        url: getCustomSearchRssUrl(combinedPortfolioQuery),
+        category: 'portfolio',
+        icon: '⚡',
+      });
+    }
   } else if (category === 'all') {
     sourcesToFetch = RSS_SOURCES;
   } else {

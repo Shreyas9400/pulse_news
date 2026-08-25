@@ -2,13 +2,13 @@ export interface RssSource {
   id: string;
   name: string;
   url: string;
-  category: 'markets' | 'tech' | 'ai' | 'world' | 'business' | 'science';
+  category: string;
   icon: string;
   isFinancialTicker?: boolean;
 }
 
 export const RSS_SOURCES: RssSource[] = [
-  // Yahoo Finance & Markets (Requested by user)
+  // Yahoo Finance & General Markets
   {
     id: 'yahoo-finance-top',
     name: 'Yahoo Finance',
@@ -26,13 +26,6 @@ export const RSS_SOURCES: RssSource[] = [
     isFinancialTicker: true,
   },
   {
-    id: 'cnbc-markets',
-    name: 'CNBC Markets',
-    url: 'https://search.cnbc.com/rs/search/combinedlist.view?partnerId=wrss01&id=15839069',
-    category: 'markets',
-    icon: '💹',
-  },
-  {
     id: 'marketwatch-top',
     name: 'MarketWatch',
     url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories',
@@ -40,7 +33,61 @@ export const RSS_SOURCES: RssSource[] = [
     icon: '🏛️',
   },
 
-  // Tech & AI
+  // INDUSTRY 1: Semiconductors & Chips (Requested by user)
+  {
+    id: 'industry-chips',
+    name: 'Semiconductors & Chips',
+    url: 'https://news.google.com/rss/search?q=(Semiconductor+OR+NVIDIA+OR+TSMC+OR+ASML+OR+Intel+OR+AMD+OR+Qualcomm)+AND+(chips+OR+fabrication+OR+wafer+OR+earnings)&hl=en-US&gl=US&ceid=US:en',
+    category: 'industry-chips',
+    icon: '⚡',
+  },
+
+  // INDUSTRY 2: AI, Cloud & Datacenters
+  {
+    id: 'industry-ai-cloud',
+    name: 'AI & Cloud Infrastructure',
+    url: 'https://news.google.com/rss/search?q=(OpenAI+OR+Anthropic+OR+Azure+OR+AWS+OR+"Google+Cloud"+OR+Datacenter)+AND+(AI+OR+LLM+OR+cloud+OR+infrastructure)&hl=en-US&gl=US&ceid=US:en',
+    category: 'industry-ai-cloud',
+    icon: '🧠',
+  },
+
+  // INDUSTRY 3: EV, Automotive & Clean Energy
+  {
+    id: 'industry-ev',
+    name: 'EV & Clean Energy',
+    url: 'https://news.google.com/rss/search?q=(Tesla+OR+Rivian+OR+BYD+OR+"Clean+Energy"+OR+Lithium+OR+Battery)+AND+(EV+OR+automotive+OR+deliveries+OR+solar)&hl=en-US&gl=US&ceid=US:en',
+    category: 'industry-ev',
+    icon: '🚗',
+  },
+
+  // INDUSTRY 4: Fintech, Crypto & Banking
+  {
+    id: 'industry-fintech',
+    name: 'Fintech & Banking',
+    url: 'https://news.google.com/rss/search?q=(Fintech+OR+Banking+OR+"JPMorgan"+OR+"Goldman+Sachs"+OR+Coinbase+OR+Stripe)+AND+(Federal+Reserve+OR+interest+rates+OR+credit)&hl=en-US&gl=US&ceid=US:en',
+    category: 'industry-fintech',
+    icon: '💳',
+  },
+
+  // INDUSTRY 5: Biotech & Healthcare
+  {
+    id: 'industry-biotech',
+    name: 'Biotech & Pharma',
+    url: 'https://news.google.com/rss/search?q=(Biotech+OR+Pharmaceuticals+OR+"Eli+Lilly"+OR+"Novo+Nordisk"+OR+Pfizer)+AND+(FDA+approval+OR+clinical+trial+OR+drug)&hl=en-US&gl=US&ceid=US:en',
+    category: 'industry-biotech',
+    icon: '🧬',
+  },
+
+  // INDUSTRY 6: Cybersecurity & Defense Tech
+  {
+    id: 'industry-cyber',
+    name: 'Cybersecurity & Defense',
+    url: 'https://news.google.com/rss/search?q=(Cybersecurity+OR+CrowdStrike+OR+"Palo+Alto+Networks"+OR+Defense+OR+Lockheed)+AND+(ransomware+OR+zero-day+OR+contract)&hl=en-US&gl=US&ceid=US:en',
+    category: 'industry-cyber',
+    icon: '🛡️',
+  },
+
+  // General Tech
   {
     id: 'techcrunch',
     name: 'TechCrunch',
@@ -62,20 +109,6 @@ export const RSS_SOURCES: RssSource[] = [
     category: 'tech',
     icon: '💻',
   },
-  {
-    id: 'arstechnica',
-    name: 'Ars Technica',
-    url: 'https://feeds.arstechnica.com/arstechnica/index',
-    category: 'tech',
-    icon: '🤖',
-  },
-  {
-    id: 'google-ai-news',
-    name: 'AI & Machine Learning',
-    url: 'https://news.google.com/rss/search?q=Artificial+Intelligence+OR+LLM+OR+OpenAI+OR+NVIDIA&hl=en-US&gl=US&ceid=US:en',
-    category: 'ai',
-    icon: '🧠',
-  },
 
   // World News
   {
@@ -92,13 +125,6 @@ export const RSS_SOURCES: RssSource[] = [
     category: 'world',
     icon: '🌍',
   },
-  {
-    id: 'npr-news',
-    name: 'NPR News',
-    url: 'https://feeds.npr.org/1001/rss.xml',
-    category: 'world',
-    icon: '🎙️',
-  },
 
   // Science
   {
@@ -108,17 +134,10 @@ export const RSS_SOURCES: RssSource[] = [
     category: 'science',
     icon: '🔬',
   },
-  {
-    id: 'nasa-breaking',
-    name: 'NASA Breaking News',
-    url: 'https://www.nasa.gov/rss/dyn/breaking_news.rss',
-    category: 'science',
-    icon: '🚀',
-  },
 ];
 
 /**
- * Returns a Google News RSS feed URL for dynamic keyword searches
+ * Returns a Google News RSS feed URL for dynamic keyword searches with search operators
  */
 export function getCustomSearchRssUrl(query: string): string {
   const clean = encodeURIComponent(query.trim());
