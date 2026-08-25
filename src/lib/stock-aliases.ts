@@ -11,6 +11,7 @@ export interface TickerMetadata {
   industry: string;
   keywords: string[];
   isSector?: boolean;
+  cik?: string;
 }
 
 // ============================================================================
@@ -31,6 +32,14 @@ export const SECTOR_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['ARTIFICIAL INTELLIGENCE', 'GENERATIVE AI', 'LLM', 'CLOUD INFRASTRUCTURE', 'DATACENTER AI'],
     industry: 'AI & SOFTWARE',
     keywords: ['AI MODELS', 'DATACENTER CAPACITY', 'CLOUD COMPUTING', 'GPU CLUSTERS', 'ENTERPRISE AI'],
+    isSector: true,
+  },
+  US_FIXED_INCOME: {
+    symbol: 'US_FIXED_INCOME',
+    name: 'US FIXED INCOME & CREDIT MARKETS',
+    aliases: ['TREASURY YIELDS', 'CORPORATE BONDS', 'CREDIT SPREADS', 'HIGH YIELD', 'INVESTMENT GRADE', 'DEBT ISSUANCE'],
+    industry: 'FIXED INCOME',
+    keywords: ['CREDIT SPREADS', 'TREASURY YIELD CURVE', 'BOND MATURITY', 'DEFAULT RATES', 'DEBT ISSUANCE', 'IG HY SPREADS'],
     isSector: true,
   },
   EV_CLEAN_ENERGY: {
@@ -109,6 +118,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['NVIDIA', 'JENSEN HUANG', 'GEFORCE', 'BLACKWELL', 'HOPPER GPU', 'CUDA'],
     industry: 'SEMICONDUCTORS',
     keywords: ['AI CHIPS', 'DATACENTER GPU', 'GPU DEMAND', 'EARNINGS', 'QUARTERLY REVENUE'],
+    cik: '0001045810',
   },
   AAPL: {
     symbol: 'AAPL',
@@ -116,6 +126,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['APPLE INC', 'TIM COOK', 'IPHONE', 'IOS', 'APPLE INTELLIGENCE', 'VISION PRO'],
     industry: 'CONSUMER TECH',
     keywords: ['IPHONE SALES', 'SERVICES REVENUE', 'APP STORE', 'EARNINGS', 'HARDWARE'],
+    cik: '0000320193',
   },
   MSFT: {
     symbol: 'MSFT',
@@ -123,6 +134,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['MICROSOFT', 'SATYA NADELLA', 'AZURE CLOUD', 'COPILOT', 'WINDOWS', 'OFFICE 365'],
     industry: 'CLOUD & SOFTWARE',
     keywords: ['AZURE GROWTH', 'CLOUD COMPUTING', 'OPENAI INVESTMENT', 'ENTERPRISE REVENUE'],
+    cik: '0000789019',
   },
   GOOGL: {
     symbol: 'GOOGL',
@@ -130,6 +142,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['GOOGLE', 'ALPHABET', 'SUNDAR PICHAI', 'GEMINI AI', 'YOUTUBE', 'GOOGLE CLOUD'],
     industry: 'SEARCH & CLOUD',
     keywords: ['SEARCH AD REVENUE', 'YOUTUBE ADS', 'GOOGLE CLOUD PROFIT', 'ANTITRUST'],
+    cik: '0001652044',
   },
   AMZN: {
     symbol: 'AMZN',
@@ -137,6 +150,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['AMAZON.COM', 'ANDY JASSY', 'AWS', 'AMAZON WEB SERVICES', 'PRIME'],
     industry: 'E-COMMERCE & CLOUD',
     keywords: ['AWS CLOUD REVENUE', 'E-COMMERCE RETAIL', 'LOGISTICS', 'CLOUD MARGINS'],
+    cik: '0001018724',
   },
   META: {
     symbol: 'META',
@@ -144,6 +158,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['META', 'MARK ZUCKERBERG', 'FACEBOOK', 'INSTAGRAM', 'LLAMA AI', 'REALITY LABS'],
     industry: 'SOCIAL & AI',
     keywords: ['AD REVENUE', 'DAILY ACTIVE USERS', 'OPEN SOURCE AI', 'METAVERSE SPENDING'],
+    cik: '0001326801',
   },
   TSLA: {
     symbol: 'TSLA',
@@ -151,6 +166,23 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['TESLA INC', 'ELON MUSK', 'CYBERTRUCK', 'MODEL Y', 'MODEL 3', 'FSD', 'OPTIMUS'],
     industry: 'EV & ROBOTICS',
     keywords: ['EV DELIVERIES', 'AUTOMOTIVE MARGINS', 'ENERGY STORAGE', 'GIGAFACTORY'],
+    cik: '0001318605',
+  },
+  JPM: {
+    symbol: 'JPM',
+    name: 'JPMORGAN CHASE',
+    aliases: ['JPMORGAN', 'JAMIE DIMON', 'CHASE BANK', 'JP MORGAN'],
+    industry: 'BANKING & FIXED INCOME',
+    keywords: ['NET INTEREST INCOME', 'INVESTMENT BANKING', 'CREDIT QUALITY', 'LOAN LOSS PROVISIONS'],
+    cik: '0000019617',
+  },
+  BAC: {
+    symbol: 'BAC',
+    name: 'BANK OF AMERICA',
+    aliases: ['BANK OF AMERICA', 'BOA', 'MERRILL LYNCH'],
+    industry: 'BANKING & FIXED INCOME',
+    keywords: ['NET INTEREST YIELD', 'DEPOSIT COSTS', 'CREDIT PROVISIONS', 'BOND TRADING'],
+    cik: '0000070858',
   },
   AMD: {
     symbol: 'AMD',
@@ -158,6 +190,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['AMD', 'LISA SU', 'RYZEN', 'RADEON', 'INSTINCT MI300', 'EPYC'],
     industry: 'SEMICONDUCTORS',
     keywords: ['AI ACCELERATOR', 'DATACENTER CHIPS', 'CPU MARKET SHARE', 'DATACENTER REVENUE'],
+    cik: '0000002488',
   },
   AVGO: {
     symbol: 'AVGO',
@@ -165,6 +198,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['BROADCOM INC', 'HOCK TAN', 'VMWARE', 'NETWORKING CHIPS'],
     industry: 'SEMICONDUCTORS',
     keywords: ['AI NETWORKING', 'CUSTOM SILICON', 'VMWARE INTEGRATION', 'INFRASTRUCTURE SOFTWARE'],
+    cik: '0001730168',
   },
   TSM: {
     symbol: 'TSM',
@@ -179,6 +213,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['PALANTIR TECHNOLOGIES', 'ALEX KARP', 'AIP', 'FOUNDRY', 'GOTHAM'],
     industry: 'SOFTWARE & DEFENSE',
     keywords: ['DEFENSE CONTRACTS', 'COMMERCIAL CUSTOMER COUNT', 'AIP BOOTCAMP', 'GOVERNMENT SOFTWARE'],
+    cik: '0001321655',
   },
   COIN: {
     symbol: 'COIN',
@@ -186,6 +221,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['COINBASE GLOBAL', 'BRIAN ARMSTRONG', 'BASE L2', 'CRYPTO EXCHANGE'],
     industry: 'FINTECH & CRYPTO',
     keywords: ['TRADING VOLUME', 'CRYPTO CUSTODY', 'SPOT BITCOIN ETF', 'TRANSACTION FEES'],
+    cik: '0001679788',
   },
   CRWD: {
     symbol: 'CRWD',
@@ -193,6 +229,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['CROWDSTRIKE', 'GEORGE KURTZ', 'FALCON PLATFORM', 'ENDPOINT SECURITY'],
     industry: 'CYBERSECURITY',
     keywords: ['ARR', 'ENDPOINT PROTECTION', 'CLOUD SECURITY', 'THREAT INTELLIGENCE'],
+    cik: '0001535527',
   },
   NFLX: {
     symbol: 'NFLX',
@@ -200,6 +237,7 @@ export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
     aliases: ['NETFLIX INC', 'TED SARANDOS', 'STREAMING WARS'],
     industry: 'STREAMING',
     keywords: ['SUBSCRIBER GROWTH', 'AD TIER', 'CONTENT SPEND', 'PASSWORD SHARING CRACKDOWN'],
+    cik: '0001065280',
   },
   'BTC-USD': {
     symbol: 'BTC-USD',
@@ -230,7 +268,7 @@ export const FULL_DIRECTORY: Record<string, TickerMetadata> = {
 };
 
 /**
- * Save user custom metadata to localStorage
+ * Save user custom metadata to localStorage and maintain custom sector list
  */
 export function saveCustomMetadata(symbol: string, meta: Partial<TickerMetadata>) {
   if (typeof window === 'undefined') return;
@@ -239,17 +277,30 @@ export function saveCustomMetadata(symbol: string, meta: Partial<TickerMetadata>
     const stored = localStorage.getItem('pulse_custom_metadata');
     const map: Record<string, TickerMetadata> = stored ? JSON.parse(stored) : {};
 
+    const isSector = meta.isSector ?? (SECTOR_DIRECTORY[clean] ? true : false);
+
     const existing = FULL_DIRECTORY[clean] || {};
     map[clean] = {
       symbol: clean,
       name: (meta.name || existing.name || clean).toUpperCase(),
       aliases: (meta.aliases || existing.aliases || []).map((a) => a.toUpperCase()),
-      industry: (meta.industry || existing.industry || (meta.isSector ? 'SECTOR' : 'EQUITIES')).toUpperCase(),
+      industry: (meta.industry || existing.industry || (isSector ? 'SECTOR INTELLIGENCE' : 'EQUITIES')).toUpperCase(),
       keywords: meta.keywords || existing.keywords || ['STOCK', 'MARKET', 'BUSINESS'],
-      isSector: meta.isSector ?? (existing.isSector || isSectorEntity(clean)),
+      isSector,
+      ...(meta.cik ? { cik: meta.cik } : {}),
     };
 
     localStorage.setItem('pulse_custom_metadata', JSON.stringify(map));
+
+    // Update dedicated custom sectors list if it is a sector
+    if (isSector) {
+      const storedSectors = localStorage.getItem('pulse_custom_sectors_list');
+      const sectorsList: string[] = storedSectors ? JSON.parse(storedSectors) : [];
+      if (!sectorsList.includes(clean)) {
+        sectorsList.push(clean);
+        localStorage.setItem('pulse_custom_sectors_list', JSON.stringify(sectorsList));
+      }
+    }
   } catch (e) {
     console.warn('Error saving custom metadata:', e);
   }
@@ -259,16 +310,33 @@ export function saveCustomMetadata(symbol: string, meta: Partial<TickerMetadata>
  * Check if a symbol or name is a Sector
  */
 export function isSectorEntity(id: string): boolean {
+  if (!id) return false;
   const clean = id.trim().toUpperCase();
+
+  // 1. Built-in sector directory check
   if (SECTOR_DIRECTORY[clean]) return true;
 
-  // Check stored custom metadata
-  const customMap = getCustomMetadataMap();
-  if (customMap[clean]?.isSector) return true;
+  // 2. Client-side explicit sector list check
+  if (typeof window !== 'undefined') {
+    try {
+      const storedSectors = localStorage.getItem('pulse_custom_sectors_list');
+      if (storedSectors) {
+        const sectorsList: string[] = JSON.parse(storedSectors);
+        if (sectorsList.includes(clean)) return true;
+      }
 
-  // Any non-ticker sector name containing keywords
-  const sectorKeywords = ['SECTOR', 'INDUSTRY', 'CHIPS', 'CLOUD', 'ENERGY', 'BANKING', 'PHARMA', 'DEFENSE', 'MACRO'];
-  return sectorKeywords.some((k) => clean.includes(k));
+      const customMap = getCustomMetadataMap();
+      if (customMap[clean]?.isSector) return true;
+    } catch {}
+  }
+
+  // 3. Known keywords heuristics if not in ticker directory
+  if (!TICKER_DIRECTORY[clean]) {
+    const sectorKeywords = ['SECTOR', 'INDUSTRY', 'CHIPS', 'CLOUD', 'ENERGY', 'BANKING', 'PHARMA', 'DEFENSE', 'MACRO', 'INCOME', 'CREDIT'];
+    return sectorKeywords.some((k) => clean.includes(k));
+  }
+
+  return false;
 }
 
 /**
@@ -288,6 +356,7 @@ export function getCustomMetadataMap(): Record<string, TickerMetadata> {
  * Get metadata for any symbol (stock or sector), checking user custom map first
  */
 export function getTickerMeta(symbol: string): TickerMetadata | null {
+  if (!symbol) return null;
   const clean = symbol.trim().toUpperCase();
 
   // 1. Check user custom defined metadata
@@ -301,14 +370,14 @@ export function getTickerMeta(symbol: string): TickerMetadata | null {
     return FULL_DIRECTORY[clean];
   }
 
-  // 3. If it looks like a sector name without ticker
+  // 3. If it is a sector name
   if (isSectorEntity(clean)) {
     return {
       symbol: clean,
-      name: clean,
-      aliases: [clean],
+      name: clean.replace(/_/g, ' '),
+      aliases: [clean.replace(/_/g, ' ')],
       industry: 'SECTOR INTELLIGENCE',
-      keywords: ['INDUSTRY', 'MARKET', 'OUTLOOK', 'SECTOR'],
+      keywords: ['INDUSTRY', 'MARKET', 'OUTLOOK', 'SECTOR', 'CREDIT'],
       isSector: true,
     };
   }
@@ -330,8 +399,8 @@ export function buildEnhancedSearchQuery(symbol: string): string {
       .join(' OR ');
 
     const contextTerms = meta.isSector
-      ? ['SECTOR', 'INDUSTRY', 'OUTLOOK', ...(meta.keywords || []).slice(0, 3)]
-      : ['STOCK', 'SHARES', 'EARNINGS', 'REVENUE', ...(meta.keywords || []).slice(0, 2)];
+      ? ['SECTOR', 'INDUSTRY', 'OUTLOOK', 'CREDIT', ...(meta.keywords || []).slice(0, 3)]
+      : ['STOCK', 'SHARES', 'EARNINGS', 'REVENUE', 'DEBT', ...(meta.keywords || []).slice(0, 2)];
 
     const contextGroup = contextTerms
       .filter(Boolean)
@@ -341,15 +410,14 @@ export function buildEnhancedSearchQuery(symbol: string): string {
     return `(${aliasGroup}) AND (${contextGroup})`;
   }
 
-  // Generic fallback
-  return `("${clean}" OR "${clean} stock") AND (shares OR earnings OR revenue OR market)`;
+  return `("${clean}" OR "${clean} stock") AND (shares OR earnings OR revenue OR market OR debt)`;
 }
 
 /**
  * Builds combined Boolean query for an entire portfolio watchlist (stocks + sectors)
  */
 export function buildPortfolioCombinedQuery(symbols: string[]): string {
-  if (!symbols || symbols.length === 0) return 'stock market earnings revenue';
+  if (!symbols || symbols.length === 0) return 'stock market earnings debt revenue credit';
 
   const parts = symbols.slice(0, 10).map((sym) => {
     const clean = sym.trim().toUpperCase();
@@ -360,7 +428,7 @@ export function buildPortfolioCombinedQuery(symbols: string[]): string {
     return `"${clean}"`;
   });
 
-  return `(${parts.join(' OR ')}) AND (stock OR shares OR earnings OR quarterly OR business OR sector)`;
+  return `(${parts.join(' OR ')}) AND (stock OR shares OR earnings OR quarterly OR debt OR credit OR sector)`;
 }
 
 /**
@@ -378,6 +446,7 @@ export function getSymbolDisplayInfo(symbol: string): {
   industry: string;
   aliases: string[];
   isSector: boolean;
+  cik?: string;
 } {
   const meta = getTickerMeta(symbol) || FULL_DIRECTORY[symbol.toUpperCase()];
   if (meta) {
@@ -386,6 +455,7 @@ export function getSymbolDisplayInfo(symbol: string): {
       industry: meta.industry.toUpperCase(),
       aliases: meta.aliases.map((a) => a.toUpperCase()),
       isSector: !!meta.isSector,
+      cik: meta.cik,
     };
   }
   return {

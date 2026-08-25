@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { NewsArticle, StockQuote, StockTickerItem } from './types';
 import { RSS_SOURCES, getCustomSearchRssUrl, getYahooStockRssUrl, RssSource } from './rss-sources';
 import { buildEnhancedSearchQuery, buildPortfolioCombinedQuery } from './stock-aliases';
+import { searchTavilyCreditNews } from './tavily';
 
 const parser = new Parser({
   timeout: 10000,
@@ -207,6 +208,29 @@ export async function getAggregatedNews(options?: {
   for (const res of results) {
     if (res.status === 'fulfilled') {
       allArticles.push(...res.value);
+    }
+  }
+
+  // If Tavily API Key is configured, fetch real-time fixed income & credit intelligence
+  const tavilyQuery = query || (stockSymbols && stockSymbols.length > 0 ? stockSymbols.join(' ') : (category !== 'all' ? category : ''));
+  if (tavilyQuery && (process.env.TAVILY_API_KEY || process.env.NEXT_PUBLIC_TAVILY_API_KEY)) {
+    try {
+      const tavilyResults = await searchTavilyCreditNews(tavilyQuery, { maxResults: 6 });
+      const tavilyArticles: NewsArticle[] = tavilyResults.map((t, idx) => ({
+        id: `tavily-${Date.now()}-${idx}`,
+        title: t.title,
+        link: t.url,
+        description: t.content,
+        source: new URL(t.url).hostname.replace('www.', ''),
+        sourceIcon: '📑',
+        publishedAt: t.publishedDate || new Date().toISOString(),
+        timestamp: t.publishedDate ? new Date(t.publishedDate).getTime() : Date.now() - idx * 60000,
+        category: category || 'portfolio',
+        sentiment: deriveSentiment(t.title, t.content),
+      }));
+      allArticles.unshift(...tavilyArticles);
+    } catch (e) {
+      console.warn('Tavily search skipped:', e);
     }
   }
 
