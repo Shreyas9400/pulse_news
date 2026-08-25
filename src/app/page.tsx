@@ -10,13 +10,14 @@ import NewsCard from '@/components/NewsCard';
 import ReaderModal from '@/components/ReaderModal';
 import PortfolioModal from '@/components/PortfolioModal';
 import NotificationModal from '@/components/NotificationModal';
+import EntityDossierModal from '@/components/EntityDossierModal';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types';
-import { getTickerMeta, buildEnhancedSearchQuery } from '@/lib/stock-aliases';
+import { getTickerMeta, buildEnhancedSearchQuery, TickerMetadata } from '@/lib/stock-aliases';
 import { RefreshCw, VolumeX } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
 
-const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD'];
+const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD', 'XLK', 'SMH'];
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
 
 // Auto-refresh intervals (milliseconds)
@@ -41,6 +42,9 @@ export default function HomePage() {
 
   // Reader Modal state
   const [readerArticle, setReaderArticle] = useState<NewsArticle | null>(null);
+
+  // Entity Dossier AI Dashboard state
+  const [dossierSymbol, setDossierSymbol] = useState<string | null>(null);
 
   // Audio Speech state
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -160,9 +164,8 @@ export default function HomePage() {
     // Auto-refresh live stock quotes every 45 seconds
     const quoteInterval = setInterval(() => fetchLiveQuotes(), QUOTE_REFRESH_INTERVAL);
 
-    // Auto-refresh portfolio news every 5 minutes (no manual sync needed!)
+    // Auto-refresh portfolio news every 5 minutes
     const newsInterval = setInterval(() => {
-      // Only auto-refresh if we're on portfolio tab and not actively searching
       if (!searchQuery && !selectedStockFilter) {
         fetchNews('portfolio', '', null);
       }
@@ -224,7 +227,7 @@ export default function HomePage() {
   };
 
   // Portfolio Management with Immediate Live Auto-Sync
-  const handleAddSymbol = (sym: string) => {
+  const handleAddSymbol = (sym: string, _meta?: Partial<TickerMetadata>) => {
     const clean = sym.toUpperCase();
     const updated = [...new Set([...portfolio, clean])];
     setPortfolio(updated);
@@ -280,9 +283,7 @@ export default function HomePage() {
     }
   };
 
-  // =========================================================================
-  //  COMPUTE PER-ENTITY NEWS SUMMARIES WITH SENTIMENT
-  // =========================================================================
+  // Compute per-entity news summaries with sentiment
   const entitySummaries: PortfolioEntitySummary[] = useMemo(() => {
     if (!articles || articles.length === 0) return [];
 
@@ -292,7 +293,6 @@ export default function HomePage() {
         ? [symbol.toLowerCase(), meta.name.toLowerCase(), ...meta.aliases.map(a => a.toLowerCase())]
         : [symbol.toLowerCase()];
 
-      // Find articles that mention this entity
       const matchingArticles = articles.filter((article) => {
         const textToSearch = `${article.title} ${article.description} ${article.source}`.toLowerCase();
         return searchTerms.some(term => textToSearch.includes(term));
@@ -307,7 +307,6 @@ export default function HomePage() {
         };
       }
 
-      // Compute aggregate sentiment from matched articles
       let posCount = 0;
       let negCount = 0;
       matchingArticles.forEach((a) => {
@@ -316,15 +315,12 @@ export default function HomePage() {
       });
 
       let aggregateSentiment: 'positive' | 'neutral' | 'negative' = 'neutral';
-      if (posCount > negCount && posCount >= 2) aggregateSentiment = 'positive';
-      else if (negCount > posCount && negCount >= 2) aggregateSentiment = 'negative';
-      else if (posCount > negCount) aggregateSentiment = 'positive';
+      if (posCount > negCount) aggregateSentiment = 'positive';
       else if (negCount > posCount) aggregateSentiment = 'negative';
 
-      // Keyword-based sentiment boost from headline text
       const latestTitle = matchingArticles[0].title.toLowerCase();
-      const positiveSignals = ['surge', 'rally', 'record', 'beat', 'upgrade', 'bullish', 'strong', 'growth', 'gains', 'profit', 'outperform', 'innovation'];
-      const negativeSignals = ['drop', 'crash', 'plunge', 'miss', 'downgrade', 'bearish', 'weak', 'loss', 'decline', 'warning', 'layoff', 'recall', 'lawsuit', 'probe'];
+      const positiveSignals = ['surge', 'rally', 'record', 'beat', 'upgrade', 'bullish', 'strong', 'growth', 'gains', 'profit', 'outperform'];
+      const negativeSignals = ['drop', 'crash', 'plunge', 'miss', 'downgrade', 'bearish', 'weak', 'loss', 'decline', 'warning', 'layoff', 'lawsuit'];
 
       const hasPosSig = positiveSignals.some(s => latestTitle.includes(s));
       const hasNegSig = negativeSignals.some(s => latestTitle.includes(s));
@@ -411,6 +407,7 @@ export default function HomePage() {
             isLoadingQuotes={isLoadingQuotes}
             onRemoveSymbol={handleRemoveSymbol}
             entitySummaries={entitySummaries}
+            onOpenDossier={(sym) => setDossierSymbol(sym)}
           />
         )}
 
@@ -535,6 +532,17 @@ export default function HomePage() {
       <NotificationModal
         isOpen={isNotificationModalOpen}
         onClose={() => setIsNotificationModalOpen(false)}
+      />
+
+      {/* AI-Generated Entity & Sector Intelligence Dossier Dashboard */}
+      <EntityDossierModal
+        symbol={dossierSymbol}
+        quote={stockQuotes.find((q) => q.symbol === dossierSymbol)}
+        articles={articles}
+        isOpen={!!dossierSymbol}
+        onClose={() => setDossierSymbol(null)}
+        onSelectArticle={setReaderArticle}
+        onFilterHomeFeed={(sym) => handleSelectStockFilter(sym)}
       />
 
       {/* Distraction-Free Reader Modal */}

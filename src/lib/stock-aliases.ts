@@ -408,12 +408,81 @@ export const FULL_DIRECTORY: Record<string, TickerMetadata> = {
   ...SECTOR_DIRECTORY,
 };
 
+// Known sector and ETF symbol set for automatic classification
+export const KNOWN_SECTOR_SYMBOLS = new Set([
+  'XLK', 'SMH', 'SOXX', 'XLF', 'XLV', 'XBI', 'XLE', 'QCLN', 'CIBR', 'BOTZ', 'ITA', 'XLY',
+  'XLC', 'XLI', 'XLU', 'XLRE', 'GDX', 'VNQ', 'VTI', 'QQQ', 'SPY', 'IWM', 'DIA', 'ARKK', 'VGT'
+]);
+
 /**
- * Get metadata for any symbol (stock or sector)
+ * Save user custom metadata to localStorage
+ */
+export function saveCustomMetadata(symbol: string, meta: Partial<TickerMetadata>) {
+  if (typeof window === 'undefined') return;
+  try {
+    const clean = symbol.trim().toUpperCase();
+    const stored = localStorage.getItem('pulse_custom_metadata');
+    const map: Record<string, TickerMetadata> = stored ? JSON.parse(stored) : {};
+    
+    const existing = FULL_DIRECTORY[clean] || {};
+    map[clean] = {
+      symbol: clean,
+      name: meta.name || existing.name || clean,
+      aliases: meta.aliases || existing.aliases || [],
+      industry: meta.industry || existing.industry || (meta.isSector ? 'Sector ETF' : 'Custom Asset'),
+      keywords: meta.keywords || existing.keywords || ['stock', 'earnings', 'market'],
+      isSector: meta.isSector ?? (existing.isSector || KNOWN_SECTOR_SYMBOLS.has(clean)),
+    };
+    
+    localStorage.setItem('pulse_custom_metadata', JSON.stringify(map));
+  } catch (e) {
+    console.warn('Error saving custom metadata:', e);
+  }
+}
+
+/**
+ * Get custom metadata from localStorage
+ */
+export function getCustomMetadataMap(): Record<string, TickerMetadata> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem('pulse_custom_metadata');
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Get metadata for any symbol (stock or sector), checking user custom map first
  */
 export function getTickerMeta(symbol: string): TickerMetadata | null {
   const clean = symbol.trim().toUpperCase();
-  return FULL_DIRECTORY[clean] || null;
+  
+  // 1. Check user custom defined metadata
+  const customMap = getCustomMetadataMap();
+  if (customMap[clean]) {
+    return customMap[clean];
+  }
+
+  // 2. Check full static directory
+  if (FULL_DIRECTORY[clean]) {
+    return FULL_DIRECTORY[clean];
+  }
+
+  // 3. Fallback auto-detection for sector symbols
+  if (KNOWN_SECTOR_SYMBOLS.has(clean)) {
+    return {
+      symbol: clean,
+      name: `${clean} Sector ETF`,
+      aliases: [clean, `${clean} ETF`],
+      industry: 'Sector / ETF',
+      keywords: ['sector', 'ETF', 'index', 'market'],
+      isSector: true,
+    };
+  }
+
+  return null;
 }
 
 /**
@@ -421,18 +490,20 @@ export function getTickerMeta(symbol: string): TickerMetadata | null {
  */
 export function buildEnhancedSearchQuery(symbol: string): string {
   const clean = symbol.trim().toUpperCase();
-  const meta = FULL_DIRECTORY[clean];
+  const meta = getTickerMeta(clean) || FULL_DIRECTORY[clean];
 
   if (meta) {
     const aliasGroup = [meta.symbol, meta.name, ...meta.aliases]
+      .filter(Boolean)
       .map(a => (a.includes(' ') ? `"${a}"` : a))
       .join(' OR ');
 
     const contextTerms = meta.isSector
-      ? ['sector', 'industry', 'outlook', ...meta.keywords.slice(0, 3)]
-      : ['stock', 'shares', 'earnings', 'revenue', ...meta.keywords.slice(0, 2)];
+      ? ['sector', 'industry', 'outlook', ...(meta.keywords || []).slice(0, 3)]
+      : ['stock', 'shares', 'earnings', 'revenue', ...(meta.keywords || []).slice(0, 2)];
 
     const contextGroup = contextTerms
+      .filter(Boolean)
       .map(k => (k.includes(' ') ? `"${k}"` : k))
       .join(' OR ');
 
@@ -451,7 +522,7 @@ export function buildPortfolioCombinedQuery(symbols: string[]): string {
 
   const parts = symbols.slice(0, 10).map(sym => {
     const clean = sym.trim().toUpperCase();
-    const meta = FULL_DIRECTORY[clean];
+    const meta = getTickerMeta(clean) || FULL_DIRECTORY[clean];
     if (meta) {
       return `"${meta.name}" OR ${clean}`;
     }
@@ -477,7 +548,7 @@ export function getSymbolDisplayInfo(symbol: string): {
   aliases: string[];
   isSector: boolean;
 } {
-  const meta = FULL_DIRECTORY[symbol.toUpperCase()];
+  const meta = getTickerMeta(symbol) || FULL_DIRECTORY[symbol.toUpperCase()];
   if (meta) {
     return {
       name: meta.name,

@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { StockQuote, NewsArticle } from '@/lib/types';
-import { TrendingUp, TrendingDown, Plus, RefreshCw, X, Newspaper, AlertTriangle, CheckCircle, MinusCircle } from 'lucide-react';
+import { StockQuote } from '@/lib/types';
+import { TrendingUp, TrendingDown, Plus, RefreshCw, X, Newspaper, AlertTriangle, CheckCircle, MinusCircle, Sparkles } from 'lucide-react';
 import { getTickerMeta } from '@/lib/stock-aliases';
 
 export interface PortfolioEntitySummary {
@@ -21,6 +21,7 @@ interface PortfolioOverviewProps {
   isLoadingQuotes: boolean;
   onRemoveSymbol: (symbol: string) => void;
   entitySummaries?: PortfolioEntitySummary[];
+  onOpenDossier?: (symbol: string) => void;
 }
 
 export default function PortfolioOverview({
@@ -32,6 +33,7 @@ export default function PortfolioOverview({
   isLoadingQuotes,
   onRemoveSymbol,
   entitySummaries = [],
+  onOpenDossier,
 }: PortfolioOverviewProps) {
   if (quotes.length === 0) return null;
 
@@ -63,14 +65,14 @@ export default function PortfolioOverview({
           </div>
           <div>
             <div className="portfolio-title-row">
-              <h2 className="portfolio-title">My Tracked Portfolio</h2>
+              <h2 className="portfolio-title">My Tracked Portfolio & Sectors</h2>
               <span className={`portfolio-avg-badge ${isPortfolioPositive ? 'positive' : 'negative'}`}>
                 {isPortfolioPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                 <span>{isPortfolioPositive ? '+' : ''}{avgChange.toFixed(2)}%</span>
               </span>
             </div>
             <p className="portfolio-subtitle">
-              Live prices auto-refresh every 45s • Tap asset for intelligence wire
+              Live prices auto-refresh every 45s • Tap any entity to open AI Intelligence Dashboard
             </p>
           </div>
         </div>
@@ -107,12 +109,21 @@ export default function PortfolioOverview({
           return (
             <div
               key={quote.symbol}
-              onClick={() => onSelectSymbolFilter(isSelected ? '' : quote.symbol)}
+              onClick={() => {
+                if (onOpenDossier) {
+                  onOpenDossier(quote.symbol);
+                } else {
+                  onSelectSymbolFilter(isSelected ? '' : quote.symbol);
+                }
+              }}
               className={`portfolio-card ${isSelected ? 'selected' : ''}`}
             >
               <div className="portfolio-card-top">
                 <div className="portfolio-sym-wrap">
-                  <span className="portfolio-card-symbol">${quote.symbol}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span className="portfolio-card-symbol">${quote.symbol}</span>
+                    <Sparkles size={11} color="var(--accent-gold)" />
+                  </div>
                   <span className="portfolio-card-name">
                     {meta?.name || quote.shortName}
                   </span>
