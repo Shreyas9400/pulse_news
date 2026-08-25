@@ -1915,4 +1915,56 @@ body {
   transform: translateY(-1px);
 }
 
+/* ==========================================================================
+   PORTFOLIO SECTOR SEPARATION STYLES
+   ========================================================================== */
+.portfolio-subheading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.count-pill {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.sector-card {
+  border-left: 3px solid var(--accent-gold);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.04) 0%, rgba(18, 25, 39, 0.9) 100%);
+}
+
+.sector-badge-tag {
+  background: var(--accent-gold);
+  color: #121212;
+  font-size: 0.6rem;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.05em;
+}
+
+/* Universal Uppercase Inputs */
+input[type="text"],
+.search-input,
+.portfolio-input {
+  text-transform: uppercase !important;
+}
+
+::placeholder {
+  text-transform: uppercase;
+}
+
+
 

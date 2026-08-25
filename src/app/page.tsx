@@ -13,11 +13,11 @@ import NotificationModal from '@/components/NotificationModal';
 import EntityDossierModal from '@/components/EntityDossierModal';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types';
-import { getTickerMeta, buildEnhancedSearchQuery, TickerMetadata } from '@/lib/stock-aliases';
+import { getTickerMeta, isSectorEntity, TickerMetadata } from '@/lib/stock-aliases';
 import { RefreshCw, VolumeX } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
 
-const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD', 'XLK', 'SMH'];
+const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD', 'SEMICONDUCTORS', 'AI_CLOUD'];
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
 
 // Auto-refresh intervals (milliseconds)
@@ -85,10 +85,13 @@ export default function HomePage() {
     };
   }, []);
 
-  // Fetch Live Stock Quotes from Yahoo Finance API
+  // Fetch Live Stock Quotes from Yahoo Finance API (Only for actual ticker symbols, excluding pure sectors)
   const fetchLiveQuotes = useCallback(async (customSymbols?: string[]) => {
     setIsLoadingQuotes(true);
-    const symbolsToQuery = [...DEFAULT_INDICES, ...(customSymbols || portfolio)];
+    const activeList = customSymbols || portfolio;
+    const stockOnlySymbols = activeList.filter((s) => !isSectorEntity(s));
+    const symbolsToQuery = [...DEFAULT_INDICES, ...stockOnlySymbols];
+
     try {
       const res = await fetch(`/api/stocks?symbols=${encodeURIComponent(symbolsToQuery.join(','))}`);
       if (res.ok) {
@@ -187,7 +190,7 @@ export default function HomePage() {
     }
   };
 
-  // Filter news for a specific clicked stock
+  // Filter news for a specific clicked stock/sector
   const handleSelectStockFilter = (symbol: string) => {
     if (!symbol) {
       setSelectedStockFilter(null);
@@ -203,7 +206,7 @@ export default function HomePage() {
     e.preventDefault();
     setSelectedStockFilter(null);
     if (searchQuery.trim()) {
-      fetchNews('all', searchQuery, null);
+      fetchNews('all', searchQuery.toUpperCase(), null);
     } else {
       fetchNews(activeCategory, '', null);
     }
@@ -290,19 +293,19 @@ export default function HomePage() {
     return portfolio.map((symbol) => {
       const meta = getTickerMeta(symbol);
       const searchTerms = meta
-        ? [symbol.toLowerCase(), meta.name.toLowerCase(), ...meta.aliases.map(a => a.toLowerCase())]
+        ? [symbol.toLowerCase(), meta.name.toLowerCase(), ...meta.aliases.map((a) => a.toLowerCase())]
         : [symbol.toLowerCase()];
 
       const matchingArticles = articles.filter((article) => {
         const textToSearch = `${article.title} ${article.description} ${article.source}`.toLowerCase();
-        return searchTerms.some(term => textToSearch.includes(term));
+        return searchTerms.some((term) => textToSearch.includes(term));
       });
 
       if (matchingArticles.length === 0) {
         return {
           symbol,
           sentiment: 'neutral' as const,
-          headline: 'No recent news coverage detected.',
+          headline: 'NO RECENT BREAKING NEWS DETECTED.',
           newsCount: 0,
         };
       }
@@ -322,8 +325,8 @@ export default function HomePage() {
       const positiveSignals = ['surge', 'rally', 'record', 'beat', 'upgrade', 'bullish', 'strong', 'growth', 'gains', 'profit', 'outperform'];
       const negativeSignals = ['drop', 'crash', 'plunge', 'miss', 'downgrade', 'bearish', 'weak', 'loss', 'decline', 'warning', 'layoff', 'lawsuit'];
 
-      const hasPosSig = positiveSignals.some(s => latestTitle.includes(s));
-      const hasNegSig = negativeSignals.some(s => latestTitle.includes(s));
+      const hasPosSig = positiveSignals.some((s) => latestTitle.includes(s));
+      const hasNegSig = negativeSignals.some((s) => latestTitle.includes(s));
 
       if (hasPosSig && !hasNegSig) aggregateSentiment = 'positive';
       if (hasNegSig && !hasPosSig) aggregateSentiment = 'negative';
@@ -339,27 +342,27 @@ export default function HomePage() {
     });
   }, [articles, portfolio]);
 
-  const userPortfolioQuotes = stockQuotes.filter(q => portfolio.includes(q.symbol));
+  const userPortfolioQuotes = stockQuotes.filter((q) => portfolio.includes(q.symbol));
   const displayedArticles = activeCategory === 'saved' ? savedArticles : articles;
 
   // Header title generator
   const getChannelHeading = () => {
-    if (activeCategory === 'saved') return 'Saved Reading List';
-    if (selectedStockFilter) return `Intelligence Wire: $${selectedStockFilter}`;
-    if (searchQuery) return `Search Results: "${searchQuery}"`;
-    if (activeCategory === 'portfolio') return '💼 Curated Portfolio Intelligence';
-    if (activeCategory === 'industry-chips') return '⚡ Semiconductor & Chip Industry Wire';
-    if (activeCategory === 'industry-ai-cloud') return '🧠 AI & Cloud Infrastructure Intelligence';
-    if (activeCategory === 'industry-ev') return '🚗 EV, Clean Energy & Mobility';
-    if (activeCategory === 'industry-fintech') return '💳 Fintech, Banking & Macro Radar';
-    if (activeCategory === 'industry-biotech') return '🧬 Biotech, Pharma & Clinical Trials';
-    if (activeCategory === 'industry-cyber') return '🛡️ Cybersecurity & Defense Technology';
-    if (activeCategory === 'markets') return '📈 Financial Markets & Stock Indices';
-    if (activeCategory === 'tech') return '💻 Technology & Silicon Valley';
-    if (activeCategory === 'world') return '🌐 Global Affairs & World News';
-    if (activeCategory === 'business') return '🏛️ Business, Trade & Commerce';
-    if (activeCategory === 'science') return '🔬 Science & Space Breakthroughs';
-    return 'Front Page Top Stories';
+    if (activeCategory === 'saved') return 'SAVED READING LIST';
+    if (selectedStockFilter) return `INTELLIGENCE WIRE: ${selectedStockFilter}`;
+    if (searchQuery) return `SEARCH RESULTS: "${searchQuery.toUpperCase()}"`;
+    if (activeCategory === 'portfolio') return '💼 CURATED PORTFOLIO & SECTOR INTELLIGENCE';
+    if (activeCategory === 'industry-chips') return '⚡ SEMICONDUCTOR & CHIP INDUSTRY WIRE';
+    if (activeCategory === 'industry-ai-cloud') return '🧠 AI & CLOUD INFRASTRUCTURE INTELLIGENCE';
+    if (activeCategory === 'industry-ev') return '🚗 EV, CLEAN ENERGY & MOBILITY';
+    if (activeCategory === 'industry-fintech') return '💳 FINTECH, BANKING & MACRO RADAR';
+    if (activeCategory === 'industry-biotech') return '🧬 BIOTECH, PHARMA & CLINICAL TRIALS';
+    if (activeCategory === 'industry-cyber') return '🛡️ CYBERSECURITY & DEFENSE TECHNOLOGY';
+    if (activeCategory === 'markets') return '📈 FINANCIAL MARKETS & STOCK INDICES';
+    if (activeCategory === 'tech') return '💻 TECHNOLOGY & SILICON VALLEY';
+    if (activeCategory === 'world') return '🌐 GLOBAL AFFAIRS & WORLD NEWS';
+    if (activeCategory === 'business') return '🏛️ BUSINESS, TRADE & COMMERCE';
+    if (activeCategory === 'science') return '🔬 SCIENCE & SPACE BREAKTHROUGHS';
+    return 'FRONT PAGE TOP STORIES';
   };
 
   return (
@@ -373,7 +376,7 @@ export default function HomePage() {
       {/* FT/WSJ Style Masthead Header */}
       <Header
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={(q) => setSearchQuery(q.toUpperCase())}
         onSearchSubmit={handleSearchSubmit}
         onRefresh={() => {
           fetchLiveQuotes();
@@ -396,10 +399,11 @@ export default function HomePage() {
           portfolioCount={portfolio.length}
         />
 
-        {/* Executive Portfolio Dashboard Panel */}
+        {/* Executive Portfolio & Sectors Dashboard Panel */}
         {(activeCategory === 'portfolio' || activeCategory === 'all') && !searchQuery && (
           <PortfolioOverview
-            quotes={userPortfolioQuotes.length > 0 ? userPortfolioQuotes : stockQuotes.filter(q => !DEFAULT_INDICES.includes(q.symbol))}
+            quotes={userPortfolioQuotes.length > 0 ? userPortfolioQuotes : stockQuotes.filter((q) => !DEFAULT_INDICES.includes(q.symbol))}
+            portfolioSymbols={portfolio}
             onOpenManageModal={() => setIsPortfolioModalOpen(true)}
             onSelectSymbolFilter={handleSelectStockFilter}
             selectedSymbolFilter={selectedStockFilter}
@@ -440,10 +444,10 @@ export default function HomePage() {
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 2 }}>
               {selectedStockFilter
-                ? `Boolean query feeds & Yahoo Finance articles for ${selectedStockFilter}`
+                ? `BOOLEAN QUERY FEEDS & NEWS FOR ${selectedStockFilter}`
                 : activeCategory === 'portfolio'
-                ? `Auto-synced across ${portfolio.length} assets • News refreshes every 5 min`
-                : `${displayedArticles.length} stories reported • Continuous monitoring`}
+                ? `AUTO-SYNCED ACROSS ${portfolio.length} ASSETS & SECTORS • NEWS REFRESHTIME: 5 MIN`
+                : `${displayedArticles.length} STORIES REPORTED • CONTINUOUS MONITORING`}
             </p>
           </div>
 
@@ -462,7 +466,7 @@ export default function HomePage() {
                   cursor: 'pointer',
                 }}
               >
-                Clear ${selectedStockFilter} Filter
+                CLEAR {selectedStockFilter} FILTER
               </button>
             )}
 
@@ -482,7 +486,7 @@ export default function HomePage() {
                   cursor: 'pointer',
                 }}
               >
-                Clear Search
+                CLEAR SEARCH
               </button>
             )}
           </div>
@@ -492,14 +496,14 @@ export default function HomePage() {
         {isRefreshingNews && displayedArticles.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', color: 'var(--accent-gold)' }} />
-            <p style={{ fontSize: '1rem', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>Fetching live intelligence wire...</p>
+            <p style={{ fontSize: '1rem', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>FETCHING LIVE INTELLIGENCE WIRE...</p>
           </div>
         ) : displayedArticles.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', margin: '20px 0 60px' }}>
             <p style={{ fontSize: '1.05rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-secondary)' }}>
               {activeCategory === 'saved'
-                ? 'No saved articles yet. Bookmark articles with the bookmark icon to read them anytime.'
-                : 'No recent headlines found for this sector or portfolio.'}
+                ? 'NO SAVED ARTICLES YET. BOOKMARK ARTICLES TO READ THEM ANYTIME.'
+                : 'NO RECENT HEADLINES FOUND FOR THIS SECTOR OR PORTFOLIO.'}
             </p>
           </div>
         ) : (
@@ -614,10 +618,10 @@ export default function HomePage() {
       >
         <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: 'var(--font-serif)' }}>
-            <strong>Financial Pulse</strong> • Global Market & Portfolio Intelligence Edition
+            <strong>FINANCIAL PULSE</strong> • GLOBAL MARKET & PORTFOLIO INTELLIGENCE EDITION
           </div>
           <div style={{ fontSize: '0.75rem' }}>
-            PWA Enabled • FCM Push Protocol • Yahoo Finance Live Stream
+            PWA ENABLED • FCM PUSH PROTOCOL • YAHOO FINANCE LIVE STREAM
           </div>
         </div>
       </footer>

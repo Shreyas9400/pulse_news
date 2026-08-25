@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, TrendingUp, Check, Layers, BarChart2, Tag, Building2, Search, Info } from 'lucide-react';
-import { getAvailableSectors, FULL_DIRECTORY, getTickerMeta, saveCustomMetadata, TickerMetadata } from '@/lib/stock-aliases';
+import { X, Plus, TrendingUp, Check, BarChart2, Tag, Building2, Search, Zap } from 'lucide-react';
+import { SECTOR_DIRECTORY, getTickerMeta, saveCustomMetadata, TickerMetadata } from '@/lib/stock-aliases';
 
 interface PortfolioModalProps {
   isOpen: boolean;
@@ -15,12 +15,10 @@ interface PortfolioModalProps {
 const POPULAR_STOCKS = [
   'NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'AMD',
   'AVGO', 'TSM', 'PLTR', 'CRWD', 'CRM', 'NFLX', 'COIN',
-  'BTC-USD', 'ETH-USD', 'SOL-USD', 'SPY', 'QQQ',
+  'BTC-USD', 'ETH-USD', 'SOL-USD',
 ];
 
-const POPULAR_SECTORS = [
-  'XLK', 'SMH', 'SOXX', 'XLF', 'XLV', 'XBI', 'XLE', 'QCLN', 'CIBR', 'BOTZ', 'ITA', 'XLY',
-];
+const PRESET_SECTORS = Object.keys(SECTOR_DIRECTORY);
 
 export default function PortfolioModal({
   isOpen,
@@ -30,50 +28,89 @@ export default function PortfolioModal({
   onRemoveSymbol,
 }: PortfolioModalProps) {
   const [activeTab, setActiveTab] = useState<'stocks' | 'sectors'>('stocks');
-  const [inputSymbol, setInputSymbol] = useState('');
-  const [inputName, setInputName] = useState('');
-  const [inputAliases, setInputAliases] = useState('');
-  const [entityType, setEntityType] = useState<'stock' | 'sector' | 'crypto'>('stock');
+  
+  // Stock inputs
+  const [stockSymbol, setStockSymbol] = useState('');
+  const [stockName, setStockName] = useState('');
+  const [stockAliases, setStockAliases] = useState('');
+
+  // Sector inputs (Pure Name — No Ticker)
+  const [sectorName, setSectorName] = useState('');
+  const [sectorAliases, setSectorAliases] = useState('');
+
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleAdd = (e: React.FormEvent) => {
+  // Add Stock (with Ticker + Name + Aliases)
+  const handleAddStock = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = inputSymbol.trim().toUpperCase();
+    const clean = stockSymbol.trim().toUpperCase();
     if (!clean) {
-      setError('Please enter a ticker symbol.');
+      setError('PLEASE ENTER A TICKER SYMBOL.');
       return;
     }
 
     if (portfolio.includes(clean)) {
-      setError(`"${clean}" is already in your portfolio.`);
+      setError(`"${clean}" IS ALREADY IN YOUR WATCHLIST.`);
       return;
     }
 
-    const aliasesList = inputAliases
+    const aliasesList = stockAliases
       .split(',')
-      .map((a) => a.trim())
+      .map((a) => a.trim().toUpperCase())
       .filter(Boolean);
-
-    const isSector = activeTab === 'sectors' || entityType === 'sector';
 
     const customMeta: Partial<TickerMetadata> = {
       symbol: clean,
-      name: inputName.trim() || clean,
+      name: (stockName.trim() || clean).toUpperCase(),
       aliases: aliasesList,
-      industry: isSector ? 'Sector ETF' : entityType === 'crypto' ? 'Digital Assets' : 'Equities',
-      isSector,
+      industry: 'EQUITIES',
+      isSector: false,
     };
 
-    // Persist to custom metadata
     saveCustomMetadata(clean, customMeta);
     onAddSymbol(clean, customMeta);
 
-    // Reset inputs
-    setInputSymbol('');
-    setInputName('');
-    setInputAliases('');
+    setStockSymbol('');
+    setStockName('');
+    setStockAliases('');
+    setError(null);
+  };
+
+  // Add Sector (Pure Name + Aliases — NO TICKER)
+  const handleAddSector = (e: React.FormEvent) => {
+    e.preventDefault();
+    const nameClean = sectorName.trim().toUpperCase();
+    if (!nameClean) {
+      setError('PLEASE ENTER A SECTOR NAME.');
+      return;
+    }
+
+    const sectorId = nameClean.replace(/\s+/g, '_');
+    if (portfolio.includes(sectorId) || portfolio.includes(nameClean)) {
+      setError(`"${nameClean}" IS ALREADY IN YOUR SECTORS.`);
+      return;
+    }
+
+    const aliasesList = sectorAliases
+      .split(',')
+      .map((a) => a.trim().toUpperCase())
+      .filter(Boolean);
+
+    const customMeta: Partial<TickerMetadata> = {
+      symbol: sectorId,
+      name: nameClean,
+      aliases: [nameClean, ...aliasesList],
+      industry: 'SECTOR INTELLIGENCE',
+      isSector: true,
+    };
+
+    saveCustomMetadata(sectorId, customMeta);
+    onAddSymbol(sectorId, customMeta);
+
+    setSectorName('');
+    setSectorAliases('');
     setError(null);
   };
 
@@ -106,9 +143,9 @@ export default function PortfolioModal({
               <TrendingUp size={16} />
             </div>
             <div>
-              <h3 className="modal-title-serif">Manage Watchlist & Sectors</h3>
+              <h3 className="modal-title-serif">MANAGE PORTFOLIO & SECTOR TRACKERS</h3>
               <p className="modal-subtitle">
-                Configure tickers, custom search aliases, and industry sectors
+                ADD EQUITIES WITH TICKERS OR TRACK PURE INDUSTRY SECTORS (NO TICKER REQUIRED)
               </p>
             </div>
           </div>
@@ -123,107 +160,164 @@ export default function PortfolioModal({
             type="button"
             onClick={() => {
               setActiveTab('stocks');
-              setEntityType('stock');
+              setError(null);
             }}
             className={`portfolio-tab ${activeTab === 'stocks' ? 'active' : ''}`}
           >
             <TrendingUp size={13} />
-            <span>Stocks & Crypto ({stocksInPortfolio.length})</span>
+            <span>STOCKS & CRYPTO ({stocksInPortfolio.length})</span>
           </button>
           <button
             type="button"
             onClick={() => {
               setActiveTab('sectors');
-              setEntityType('sector');
+              setError(null);
             }}
             className={`portfolio-tab ${activeTab === 'sectors' ? 'active' : ''}`}
           >
             <BarChart2 size={13} />
-            <span>Sectors & ETFs ({sectorsInPortfolio.length})</span>
+            <span>SECTORS (PURE NAMES) ({sectorsInPortfolio.length})</span>
           </button>
         </div>
 
-        {/* Separate Inputs Form */}
-        <form onSubmit={handleAdd} className="portfolio-detailed-form">
-          <div className="form-fields-grid">
-            {/* Field 1: Ticker Symbol */}
-            <div className="form-field-group">
-              <label className="form-field-label">
-                <Tag size={12} />
-                <span>Ticker Symbol *</span>
-              </label>
-              <input
-                type="text"
-                className="search-input portfolio-input"
-                placeholder={activeTab === 'stocks' ? 'e.g. NVDA, AAPL, BTC-USD' : 'e.g. XLK, SMH, XBI'}
-                value={inputSymbol}
-                onChange={(e) => {
-                  setInputSymbol(e.target.value);
-                  setError(null);
-                }}
-                autoFocus
-              />
+        {/* Form Mode 1: Stocks (Ticker + Name + Aliases) */}
+        {activeTab === 'stocks' ? (
+          <form onSubmit={handleAddStock} className="portfolio-detailed-form">
+            <div className="form-fields-grid">
+              {/* Ticker Symbol */}
+              <div className="form-field-group">
+                <label className="form-field-label">
+                  <Tag size={12} />
+                  <span>TICKER SYMBOL *</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input portfolio-input"
+                  placeholder="E.G. NVDA, AAPL, BTC-USD"
+                  value={stockSymbol}
+                  onChange={(e) => {
+                    setStockSymbol(e.target.value.toUpperCase());
+                    setError(null);
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              {/* Company Name */}
+              <div className="form-field-group">
+                <label className="form-field-label">
+                  <Building2 size={12} />
+                  <span>COMPANY NAME</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input portfolio-input"
+                  placeholder="E.G. NVIDIA CORPORATION"
+                  value={stockName}
+                  onChange={(e) => setStockName(e.target.value.toUpperCase())}
+                />
+              </div>
+
+              {/* Aliases */}
+              <div className="form-field-group full-width">
+                <label className="form-field-label">
+                  <Search size={12} />
+                  <span>SEARCH ALIASES & BOOLEAN OPERATORS (COMMA SEPARATED)</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input portfolio-input"
+                  placeholder="E.G. JENSEN HUANG, BLACKWELL GPU, GEFORCE, AI CHIPS"
+                  value={stockAliases}
+                  onChange={(e) => setStockAliases(e.target.value.toUpperCase())}
+                />
+                <span className="form-field-hint">
+                  AUTO-SYNCS BOOLEAN SEARCH QUERIES TO PULL RECENT HEADLINES ACROSS ALL ALIASES.
+                </span>
+              </div>
             </div>
 
-            {/* Field 2: Company / Sector Name */}
-            <div className="form-field-group">
-              <label className="form-field-label">
-                <Building2 size={12} />
-                <span>Company / Sector Name</span>
-              </label>
-              <input
-                type="text"
-                className="search-input"
-                placeholder={activeTab === 'stocks' ? 'e.g. NVIDIA Corporation' : 'e.g. Tech Select Sector SPDR'}
-                value={inputName}
-                onChange={(e) => setInputName(e.target.value)}
-              />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button
+                type="submit"
+                className="btn-portfolio-primary"
+                style={{ padding: '0 20px', height: 42, fontSize: '0.85rem' }}
+              >
+                <Plus size={15} />
+                <span>ADD TO STOCKS WATCHLIST</span>
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* Form Mode 2: Sectors (Pure Name + Search Aliases — NO TICKER) */
+          <form onSubmit={handleAddSector} className="portfolio-detailed-form">
+            <div className="form-fields-grid">
+              {/* Sector Name */}
+              <div className="form-field-group full-width">
+                <label className="form-field-label">
+                  <Zap size={12} />
+                  <span>SECTOR / INDUSTRY NAME * (NO TICKER REQUIRED)</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input portfolio-input"
+                  placeholder="E.G. SEMICONDUCTORS, AI & CLOUD, QUANTUM COMPUTING"
+                  value={sectorName}
+                  onChange={(e) => {
+                    setSectorName(e.target.value.toUpperCase());
+                    setError(null);
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              {/* Sector Search Aliases */}
+              <div className="form-field-group full-width">
+                <label className="form-field-label">
+                  <Search size={12} />
+                  <span>SECTOR ALIASES & KEYWORDS (COMMA SEPARATED)</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input portfolio-input"
+                  placeholder="E.G. CHIPS, FAB CAPACITY, WAFER, FOUNDRY, SUPPLY CHAIN"
+                  value={sectorAliases}
+                  onChange={(e) => setSectorAliases(e.target.value.toUpperCase())}
+                />
+                <span className="form-field-hint">
+                  SEARCH QUERIES WILL AGGREGATE ALL INDUSTRY & THEMATIC ARTICLES FOR THIS SECTOR.
+                </span>
+              </div>
             </div>
 
-            {/* Field 3: Search Aliases */}
-            <div className="form-field-group full-width">
-              <label className="form-field-label">
-                <Search size={12} />
-                <span>Search Aliases & Boolean Keywords (comma separated)</span>
-              </label>
-              <input
-                type="text"
-                className="search-input"
-                placeholder={activeTab === 'stocks' ? 'e.g. Jensen Huang, Blackwell GPU, GeForce, AI chips' : 'e.g. semiconductor index, fab capacity, TSMC supply'}
-                value={inputAliases}
-                onChange={(e) => setInputAliases(e.target.value)}
-              />
-              <span className="form-field-hint">
-                These aliases power Google News Boolean operators (`${inputSymbol || 'TICKER'} OR "Jensen Huang"`) to surface hidden intelligence.
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button
+                type="submit"
+                className="btn-portfolio-primary"
+                style={{ padding: '0 20px', height: 42, fontSize: '0.85rem', background: 'var(--accent-gold)', color: '#121212' }}
+              >
+                <Plus size={15} />
+                <span>ADD SECTOR TRACKER</span>
+              </button>
             </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-            <button
-              type="submit"
-              className="btn-portfolio-primary"
-              style={{ padding: '0 20px', height: 42, fontSize: '0.85rem' }}
-            >
-              <Plus size={15} />
-              <span>Add to {activeTab === 'stocks' ? 'Watchlist' : 'Sectors'}</span>
-            </button>
-          </div>
-        </form>
+          </form>
+        )}
 
         {error && <p className="form-error-msg">{error}</p>}
 
-        {/* Active Watchlist */}
+        {/* Active Watchlist / Sector List */}
         <div className="portfolio-watchlist-section">
           <h4 className="section-label-sm">
-            {activeTab === 'stocks' ? `Active Stocks (${stocksInPortfolio.length})` : `Tracked Sectors (${sectorsInPortfolio.length})`}
+            {activeTab === 'stocks'
+              ? `ACTIVE STOCKS & CRYPTO (${stocksInPortfolio.length})`
+              : `TRACKED SECTORS (${sectorsInPortfolio.length})`}
           </h4>
 
           {(activeTab === 'stocks' ? stocksInPortfolio : sectorsInPortfolio).length === 0 ? (
             <div className="empty-box-sm">
               {activeTab === 'stocks'
-                ? 'No individual stocks added yet. Add custom tickers above or select from popular companies.'
-                : 'No sector trackers added yet. Add sector ETFs (e.g. XLK, SMH) to monitor industry-wide developments.'}
+                ? 'NO STOCKS ADDED YET. ADD CUSTOM TICKERS ABOVE OR PICK FROM SUGGESTIONS.'
+                : 'NO SECTORS ADDED YET. ADD INDUSTRY NAMES ABOVE (E.G. SEMICONDUCTORS) OR SELECT PRESETS BELOW.'}
             </div>
           ) : (
             <div className="portfolio-chips-wrap">
@@ -232,8 +326,9 @@ export default function PortfolioModal({
                 return (
                   <div key={symbol} className="active-symbol-chip">
                     <div className="chip-info">
-                      <span className="chip-symbol">${symbol}</span>
-                      {meta && <span className="chip-name">{meta.name}</span>}
+                      <span className="chip-symbol">
+                        {meta?.isSector ? '' : '$'}{meta?.name || symbol}
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -253,10 +348,10 @@ export default function PortfolioModal({
         {/* Suggestions Grid */}
         <div className="portfolio-suggestions-section">
           <h4 className="section-label-sm">
-            {activeTab === 'stocks' ? 'Suggested Stocks & Crypto' : 'Suggested Sector & ETF Trackers'}
+            {activeTab === 'stocks' ? 'POPULAR STOCKS & CRYPTO (TAP TO TOGGLE)' : 'CORE INDUSTRY SECTORS (TAP TO TOGGLE)'}
           </h4>
           <div className="suggestions-grid">
-            {(activeTab === 'stocks' ? POPULAR_STOCKS : POPULAR_SECTORS).map((sym) => {
+            {(activeTab === 'stocks' ? POPULAR_STOCKS : PRESET_SECTORS).map((sym) => {
               const inPortfolio = portfolio.includes(sym);
               const meta = getTickerMeta(sym);
               return (
@@ -265,13 +360,13 @@ export default function PortfolioModal({
                   type="button"
                   onClick={() => handleToggle(sym)}
                   className={`suggestion-chip-detailed ${inPortfolio ? 'active' : ''}`}
-                  title={meta?.aliases.slice(0, 3).join(', ')}
                 >
                   <div className="suggestion-chip-top">
                     {inPortfolio && <Check size={11} />}
-                    <span className="suggestion-symbol">${sym}</span>
+                    <span className="suggestion-symbol">
+                      {meta?.isSector ? '' : '$'}{meta?.name || sym}
+                    </span>
                   </div>
-                  {meta && <span className="suggestion-name">{meta.name}</span>}
                   {meta && <span className="suggestion-industry">{meta.industry}</span>}
                 </button>
               );
