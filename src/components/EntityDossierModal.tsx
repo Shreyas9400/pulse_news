@@ -22,6 +22,7 @@ import {
   Scale,
   DollarSign,
   AlertOctagon,
+  Zap,
 } from 'lucide-react';
 
 interface EntityDossierModalProps {
@@ -50,11 +51,16 @@ export default function EntityDossierModal({
   const [filingsError, setFilingsError] = useState<string | null>(null);
   const [companyCik, setCompanyCik] = useState<string | null>(null);
 
+  // Tavily on-demand fresh intelligence state
+  const [tavilyArticles, setTavilyArticles] = useState<NewsArticle[]>([]);
+  const [isFetchingTavily, setIsFetchingTavily] = useState<boolean>(false);
+  const [tavilyActive, setTavilyActive] = useState<boolean>(false);
+
   const cleanSym = symbol ? symbol.toUpperCase() : '';
   const meta = cleanSym ? getTickerMeta(cleanSym) : null;
   const info = cleanSym ? getSymbolDisplayInfo(cleanSym) : { name: '', industry: '', aliases: [], isSector: false };
 
-  // Fetch SEC Filings from API when opening SEC tab or changing form filter
+  // Fetch SEC Filings from API
   useEffect(() => {
     if (!isOpen || !cleanSym || info.isSector) return;
 
@@ -85,8 +91,26 @@ export default function EntityDossierModal({
     loadFilings();
   }, [isOpen, cleanSym, selectedFormFilter, info.isSector]);
 
-  // Filter articles matching this entity
-  const matchedArticles = useMemo(() => {
+  // Function to fetch fresh intelligence via Tavily (specifically when news is dated or on demand)
+  const fetchTavilyFreshNews = async (force: boolean = false) => {
+    if (!cleanSym) return;
+    setIsFetchingTavily(true);
+    try {
+      const res = await fetch(`/api/tavily-fresh?symbol=${encodeURIComponent(cleanSym)}&force=${force}`);
+      const data = await res.json();
+      if (data.success && data.articles && data.articles.length > 0) {
+        setTavilyArticles(data.articles);
+        setTavilyActive(true);
+      }
+    } catch (e) {
+      console.warn('Tavily fresh fetch error:', e);
+    } finally {
+      setIsFetchingTavily(false);
+    }
+  };
+
+  // Base matched articles from global news feed
+  const baseMatchedArticles = useMemo(() => {
     if (!cleanSym) return [];
     const searchTerms = [
       cleanSym.toLowerCase(),
@@ -100,16 +124,42 @@ export default function EntityDossierModal({
     });
   }, [articles, cleanSym, info]);
 
+  // If base articles are empty or older than 24 hours, automatically fetch from Tavily once
+  useEffect(() => {
+    if (!isOpen || !cleanSym) return;
+
+    const isStale = baseMatchedArticles.length === 0 || (
+      Date.now() - baseMatchedArticles[0].timestamp > 24 * 60 * 60 * 1000
+    );
+
+    if (isStale && tavilyArticles.length === 0 && !isFetchingTavily) {
+      fetchTavilyFreshNews(false);
+    }
+  }, [isOpen, cleanSym, baseMatchedArticles.length]);
+
+  // Combined articles (Tavily + Base RSS)
+  const combinedArticles = useMemo(() => {
+    const map = new Map<string, NewsArticle>();
+    tavilyArticles.forEach((a) => map.set(a.title.toLowerCase().slice(0, 35), a));
+    baseMatchedArticles.forEach((a) => {
+      const key = a.title.toLowerCase().slice(0, 35);
+      if (!map.has(key)) map.set(key, a);
+    });
+    const list = Array.from(map.values());
+    list.sort((a, b) => b.timestamp - a.timestamp);
+    return list;
+  }, [tavilyArticles, baseMatchedArticles]);
+
   // Senior Credit Risk & Materiality Metrics
   const creditAnalysis = useMemo(() => {
     let pos = 0;
     let neg = 0;
-    matchedArticles.forEach((a) => {
+    combinedArticles.forEach((a) => {
       if (a.sentiment === 'positive') pos++;
       else if (a.sentiment === 'negative') neg++;
     });
 
-    const total = matchedArticles.length || 1;
+    const total = combinedArticles.length || 1;
     let creditOutlook: 'STABLE / EXPANDING' | 'NEUTRAL MONITOR' | 'DEFENSIVE / ELEVATED SPREAD RISK' = 'NEUTRAL MONITOR';
     let creditScore = 50;
 
@@ -122,9 +172,9 @@ export default function EntityDossierModal({
     }
 
     const materialityLevel =
-      matchedArticles.length >= 4 || Math.abs((quote?.changePercent || 0)) > 2.5
+      combinedArticles.length >= 4 || Math.abs((quote?.changePercent || 0)) > 2.5
         ? 'HIGH CREDIT MATERIALITY'
-        : matchedArticles.length >= 2
+        : combinedArticles.length >= 2
         ? 'MODERATE SURVEILLANCE'
         : 'ROUTINE SURVEILLANCE';
 
@@ -140,11 +190,11 @@ export default function EntityDossierModal({
       creditScore,
       materialityLevel,
       materialityColor,
-      storyCount: matchedArticles.length,
+      storyCount: combinedArticles.length,
       pos,
       neg,
     };
-  }, [matchedArticles, quote]);
+  }, [combinedArticles, quote]);
 
   if (!isOpen || !symbol) return null;
 
@@ -192,6 +242,11 @@ export default function EntityDossierModal({
                 {companyCik && (
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', border: '1px solid var(--border-subtle)', padding: '1px 5px', borderRadius: 2 }}>
                     CIK: {companyCik}
+                  </span>
+                )}
+                {tavilyActive && (
+                  <span style={{ fontSize: '0.68rem', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '1px 5px', borderRadius: 2, fontWeight: 800 }}>
+                    ⚡ TAVILY ENHANCED
                   </span>
                 )}
               </div>
@@ -260,7 +315,7 @@ export default function EntityDossierModal({
             className={`portfolio-tab ${activeTab === 'news_wire' ? 'active' : ''}`}
           >
             <BookOpen size={13} />
-            <span>INTELLIGENCE WIRE ({matchedArticles.length})</span>
+            <span>INTELLIGENCE WIRE ({combinedArticles.length})</span>
           </button>
         </div>
 
@@ -308,8 +363,8 @@ export default function EntityDossierModal({
               </div>
 
               <p style={{ fontSize: '0.92rem', lineHeight: 1.6, color: 'var(--text-primary)', marginBottom: 10 }}>
-                {matchedArticles.length > 0
-                  ? `CREDIT DESK ASSESSMENT: ${info.name} (${cleanSym}) exhibits active surveillance signals. Recent disclosures highlight "${matchedArticles[0].title}". Fixed Income liquidity profile remains in focus with credit spreads trading in line with broader sector risk premia.`
+                {combinedArticles.length > 0
+                  ? `CREDIT DESK ASSESSMENT: ${info.name} (${cleanSym}) exhibits active surveillance signals. Recent reporting focuses on "${combinedArticles[0].title}". Fixed Income liquidity profile remains in focus with credit spreads trading in line with broader sector risk premia.`
                   : `CREDIT DESK ASSESSMENT: ${info.name} (${cleanSym}) demonstrates stable baseline credit health. No critical covenant breaches, debt downgrades, or liquidity constraints identified in the trailing surveillance cycle.`}
               </p>
 
@@ -431,41 +486,73 @@ export default function EntityDossierModal({
           </div>
         )}
 
-        {/* TAB 3: LIVE INTELLIGENCE WIRE */}
+        {/* TAB 3: LIVE INTELLIGENCE WIRE (TAVILY + RSS) */}
         {activeTab === 'news_wire' && (
           <div style={{ marginTop: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
               <h4 style={{ fontSize: '0.95rem', fontFamily: 'var(--font-serif)', fontWeight: 800 }}>
-                DISPATCHES FOR {cleanSym} ({matchedArticles.length})
+                DISPATCHES FOR {cleanSym} ({combinedArticles.length})
               </h4>
 
-              <button
-                onClick={() => {
-                  onFilterHomeFeed(cleanSym);
-                  onClose();
-                }}
-                style={{
-                  background: 'rgba(212, 175, 55, 0.12)',
-                  border: '1px solid var(--accent-gold)',
-                  color: 'var(--accent-gold)',
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                FILTER MAIN WIRE FOR {cleanSym}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {/* On-Demand Tavily Freshness Button */}
+                <button
+                  onClick={() => fetchTavilyFreshNews(true)}
+                  disabled={isFetchingTavily}
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid #10b981',
+                    color: '#10b981',
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                  title="Query Tavily across SEC, Moody's, S&P, Fitch, and Reuters for fresh intelligence"
+                >
+                  <Zap size={11} />
+                  <span>{isFetchingTavily ? 'QUERYING TAVILY...' : '⚡ REFRESH VIA TAVILY'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    onFilterHomeFeed(cleanSym);
+                    onClose();
+                  }}
+                  style={{
+                    background: 'rgba(212, 175, 55, 0.12)',
+                    border: '1px solid var(--accent-gold)',
+                    color: 'var(--accent-gold)',
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  FILTER MAIN WIRE
+                </button>
+              </div>
             </div>
 
-            {matchedArticles.length === 0 ? (
+            {isFetchingTavily && (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#10b981', fontSize: '0.8rem', fontWeight: 600 }}>
+                <RefreshCw size={18} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 6px' }} />
+                Fetching fresh credit intelligence via Tavily...
+              </div>
+            )}
+
+            {combinedArticles.length === 0 ? (
               <div className="empty-box-sm">
-                NO RECENT INTELLIGENCE DISPATCHES SPECIFICALLY MATCHED FOR {cleanSym}.
+                NO RECENT INTELLIGENCE DISPATCHES FOUND. TAP &quot;⚡ REFRESH VIA TAVILY&quot; TO PULL FRESH COVERAGE.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
-                {matchedArticles.map((article) => (
+                {combinedArticles.map((article) => (
                   <div
                     key={article.id}
                     onClick={() => {
