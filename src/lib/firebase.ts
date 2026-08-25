@@ -13,6 +13,7 @@ export async function getClientFirebaseConfig() {
       apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
       authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'pulsenews.firebaseapp.com',
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'pulsenews',
+      databaseId: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || process.env.FIREBASE_DATABASE_ID || 'pulsenews',
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'pulsenews.appspot.com',
       messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
       appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
@@ -116,5 +117,26 @@ export async function listenForFCMForegroundMessages(callback: (payload: any) =>
     });
   } catch {
     return () => {};
+  }
+}
+
+/**
+ * Initializes and exports Firestore Database with support for custom named database 'pulsenews'
+ */
+export async function getFirestoreDb() {
+  if (typeof window === 'undefined') return null;
+  const appInstance = await getFirebaseApp();
+  if (!appInstance) return null;
+
+  const config = await getClientFirebaseConfig();
+  const dbId = config?.databaseId || 'pulsenews';
+
+  try {
+    const { getFirestore } = await import('firebase/firestore');
+    // Connect to the specific database 'pulsenews' created by the user
+    return getFirestore(appInstance, dbId);
+  } catch (err) {
+    console.warn('[Firebase] Could not initialize Firestore database:', err);
+    return null;
   }
 }
