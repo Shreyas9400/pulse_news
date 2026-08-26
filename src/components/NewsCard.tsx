@@ -117,14 +117,14 @@ export default function NewsCard({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Explicit Calendar Date Tag */}
-            <span className="card-date-tag" title={article.publishedAt}>
+            <span className="card-date-tag" title={article.publishedAt} suppressHydrationWarning>
               <Calendar size={10} />
-              <span>{getFormattedDate(article.timestamp)}</span>
+              <span suppressHydrationWarning>{getFormattedDate(article.timestamp)}</span>
             </span>
 
-            <span className="card-time">
+            <span className="card-time" suppressHydrationWarning>
               <Clock size={10} />
-              <span>{getTimeAgo(article.timestamp)}</span>
+              <span suppressHydrationWarning>{getTimeAgo(article.timestamp)}</span>
             </span>
           </div>
         </div>

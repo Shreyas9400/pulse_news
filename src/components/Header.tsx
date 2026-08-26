@@ -60,7 +60,7 @@ export default function Header({
       <div className="masthead-topbar">
         <div className="container masthead-topbar-inner">
           <div className="topbar-left">
-            <span className="topbar-date">{currentDateStr || 'Today'}</span>
+            <span className="topbar-date" suppressHydrationWarning>{currentDateStr || 'Today'}</span>
             <span className="edition-badge">GLOBAL EDITION</span>
           </div>
 

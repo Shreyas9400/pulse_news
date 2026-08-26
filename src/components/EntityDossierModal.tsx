@@ -123,12 +123,18 @@ export default function EntityDossierModal({
 
     try {
       const allNewsCombined = [...extraArticles, ...scrapedArticles, ...tavilyArticles, ...matchingArticles];
-      const analysis = await analyzeEntityBatch({
+      const payload = {
         entity: cleanSym,
         name: info.name || cleanSym,
         industry: info.industry,
         isSector: info.isSector,
-        articles: allNewsCombined,
+        articles: allNewsCombined.map((a) => ({
+          title: a.title,
+          link: a.link,
+          description: a.description,
+          source: a.source,
+          publishedAt: a.publishedAt,
+        })),
         filings: filings.map((f) => ({
           form: f.form,
           filingDate: f.filingDate,
@@ -136,9 +142,21 @@ export default function EntityDossierModal({
           creditRiskTakeaway: f.creditRiskTakeaway,
         })),
         forceRefresh: force,
+      };
+
+      const res = await fetch('/api/entity-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
-      setAiAnalysis(analysis);
+      const data = await res.json();
+      if (data.success && data.analysis) {
+        setAiAnalysis(data.analysis);
+      } else {
+        const analysis = await analyzeEntityBatch(payload);
+        setAiAnalysis(analysis);
+      }
     } catch (e) {
       console.warn('Error running AI batch analysis:', e);
     } finally {
