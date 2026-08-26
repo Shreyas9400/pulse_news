@@ -29,6 +29,9 @@ export default function PortfolioModal({
   onRemoveSymbol,
 }: PortfolioModalProps) {
   const [activeTab, setActiveTab] = useState<'stocks' | 'sectors'>('stocks');
+
+  // Public vs Private company toggle
+  const [isPrivate, setIsPrivate] = useState(false);
   
   // Stock inputs
   const [stockSymbol, setStockSymbol] = useState('');
@@ -44,6 +47,10 @@ export default function PortfolioModal({
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-generate internal private company ID from name
+  const generatePrivateId = (name: string) =>
+    'PRIV_' + name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').slice(0, 24);
 
   if (!isOpen) return null;
 
@@ -90,15 +97,29 @@ export default function PortfolioModal({
     setSectorName('');
     setSectorAliases('');
     setError(null);
+    setIsPrivate(false);
   };
 
-  // Add or Save Stock
+  // Add or Save Stock / Private Company
   const handleAddOrSaveStock = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = stockSymbol.trim().toUpperCase();
-    if (!clean) {
-      setError('PLEASE ENTER A TICKER SYMBOL.');
-      return;
+
+    let clean = stockSymbol.trim().toUpperCase();
+
+    if (isPrivate) {
+      // For private companies, ticker is optional — auto-generate from name if blank
+      if (!clean && !stockName.trim()) {
+        setError('PLEASE ENTER A COMPANY NAME (TICKER IS OPTIONAL FOR PRIVATE COMPANIES).');
+        return;
+      }
+      if (!clean) {
+        clean = generatePrivateId(stockName);
+      }
+    } else {
+      if (!clean) {
+        setError('PLEASE ENTER A TICKER SYMBOL.');
+        return;
+      }
     }
 
     if (!editingKey && portfolio.includes(clean)) {
@@ -113,12 +134,13 @@ export default function PortfolioModal({
 
     const resolvedCik = stockCik.trim() || DEFAULT_CIK_DIRECTORY[clean] || '';
 
-    const customMeta: Partial<TickerMetadata & { cik?: string }> = {
+    const customMeta: Partial<TickerMetadata & { cik?: string; isPrivate?: boolean }> = {
       symbol: clean,
       name: (stockName.trim() || clean).toUpperCase(),
       aliases: aliasesList,
-      industry: 'EQUITIES & FIXED INCOME',
+      industry: isPrivate ? 'PRIVATE COMPANY / UNLISTED CREDIT' : 'EQUITIES & FIXED INCOME',
       isSector: false,
+      ...(isPrivate ? { isPrivate: true } : {}),
       ...(resolvedCik ? { cik: resolvedCik } : {}),
     };
 
@@ -228,13 +250,13 @@ export default function PortfolioModal({
           </button>
         </div>
 
-        {/* Form Mode 1: Stocks (Ticker + Name + SEC CIK + Aliases) */}
+        {/* Form Mode 1: Stocks / Private Companies (Ticker + Name + SEC CIK + Aliases) */}
         {activeTab === 'stocks' ? (
           <form onSubmit={handleAddOrSaveStock} className="portfolio-detailed-form">
             {editingKey && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, background: 'rgba(212, 175, 55, 0.12)', padding: '6px 10px', borderRadius: 2, border: '1px solid var(--accent-gold)' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
-                  EDITING ISSUER: ${editingKey}
+                  EDITING ISSUER: {editingKey}
                 </span>
                 <button
                   type="button"
@@ -246,21 +268,79 @@ export default function PortfolioModal({
               </div>
             )}
 
+            {/* Public / Private Company Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em' }}>COMPANY TYPE:</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => { setIsPrivate(false); setError(null); }}
+                  style={{
+                    padding: '5px 14px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: `1px solid ${!isPrivate ? 'var(--accent-gold)' : 'var(--border-subtle)'}`,
+                    background: !isPrivate ? 'rgba(212,175,55,0.15)' : 'transparent',
+                    color: !isPrivate ? 'var(--accent-gold)' : 'var(--text-muted)',
+                    fontSize: '0.73rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    letterSpacing: '0.05em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <TrendingUp size={12} /> PUBLIC (LISTED)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsPrivate(true); setError(null); }}
+                  style={{
+                    padding: '5px 14px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: `1px solid ${isPrivate ? '#6366f1' : 'var(--border-subtle)'}`,
+                    background: isPrivate ? 'rgba(99,102,241,0.15)' : 'transparent',
+                    color: isPrivate ? '#818cf8' : 'var(--text-muted)',
+                    fontSize: '0.73rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    letterSpacing: '0.05em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <Building2 size={12} /> PRIVATE (UNLISTED)
+                </button>
+              </div>
+              {isPrivate && (
+                <span style={{ fontSize: '0.7rem', color: '#818cf8', marginLeft: 4 }}>
+                  Ticker is optional — auto-generated if blank
+                </span>
+              )}
+            </div>
+
             <div className="form-fields-grid">
               {/* Ticker Symbol */}
               <div className="form-field-group">
                 <label className="form-field-label">
                   <Tag size={12} />
-                  <span>TICKER SYMBOL *</span>
+                  <span>TICKER SYMBOL {isPrivate ? '(OPTIONAL FOR PRIVATE)' : '*'}</span>
                 </label>
                 <input
                   type="text"
                   className="search-input portfolio-input"
-                  placeholder="E.G. NVDA, JPM, CCLFX, BCSF"
+                  placeholder={isPrivate ? 'OPTIONAL — E.G. BAIN-CREDIT, APOLLO-FI (OR LEAVE BLANK)' : 'E.G. NVDA, JPM, CCLFX, BCSF'}
                   value={stockSymbol}
                   onChange={(e) => handleSymbolChange(e.target.value)}
-                  autoFocus
+                  autoFocus={!isPrivate}
+                  style={isPrivate ? { borderColor: 'rgba(99,102,241,0.4)', background: 'rgba(99,102,241,0.05)' } : {}}
                 />
+                {isPrivate && !stockSymbol && stockName && (
+                  <span className="form-field-hint" style={{ color: '#818cf8' }}>
+                    AUTO-ID: {generatePrivateId(stockName)}
+                  </span>
+                )}
               </div>
 
               {/* Company Name */}
