@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StockQuote, NewsArticle } from '@/lib/types';
 import { getTickerMeta, getSymbolDisplayInfo } from '@/lib/stock-aliases';
 import { SecFiling, resolveCik } from '@/lib/sec-edgar';
@@ -21,13 +21,13 @@ import {
   RefreshCw,
   Landmark,
   Scale,
-  DollarSign,
   AlertOctagon,
   Zap,
   Globe,
   Bell,
   History,
   CheckCircle2,
+  Radio,
 } from 'lucide-react';
 
 interface EntityDossierModalProps {
@@ -53,12 +53,13 @@ export default function EntityDossierModal({
   const [selectedFormFilter, setSelectedFormFilter] = useState<string>('ALL');
   const [filings, setFilings] = useState<SecFiling[]>([]);
   const [isLoadingFilings, setIsLoadingFilings] = useState<boolean>(false);
-  const [filingsError, setFilingsError] = useState<string | null>(null);
+  const [filingsNotice, setFilingsNotice] = useState<string | null>(null);
   const [companyCik, setCompanyCik] = useState<string | null>(null);
 
   // Multi-Engine Scraped Articles state
   const [scrapedArticles, setScrapedArticles] = useState<NewsArticle[]>([]);
   const [isScraping, setIsScraping] = useState<boolean>(false);
+  const [scrapeCompleted, setScrapeCompleted] = useState<boolean>(false);
 
   // AI Structured Analysis & Memory state
   const [aiAnalysis, setAiAnalysis] = useState<EntityCreditDossierAnalysis | null>(null);
@@ -90,22 +91,20 @@ export default function EntityDossierModal({
     const resolved = resolveCik(cleanSym);
     setCompanyCik(resolved);
 
-    if (!resolved) return;
-
     const loadFilings = async () => {
       setIsLoadingFilings(true);
-      setFilingsError(null);
+      setFilingsNotice(null);
       try {
         const res = await fetch(`/api/sec-filings?symbol=${encodeURIComponent(cleanSym)}&form=${selectedFormFilter}`);
         const data = await res.json();
-        if (data.success && data.filings) {
+        if (data.success && Array.isArray(data.filings)) {
           setFilings(data.filings);
+          if (data.notice) setFilingsNotice(data.notice);
         } else {
           setFilings([]);
-          if (data.error) setFilingsError(data.error);
         }
       } catch (err: any) {
-        setFilingsError(err.message || 'Failed to load SEC EDGAR filings');
+        setFilings([]);
       } finally {
         setIsLoadingFilings(false);
       }
@@ -115,12 +114,12 @@ export default function EntityDossierModal({
   }, [isOpen, cleanSym, selectedFormFilter, info.isSector]);
 
   // Trigger AI Credit Risk Batch Analysis with Memory Layer & 4-Hour Cache
-  const runAiAnalysis = async (force: boolean = false) => {
+  const runAiAnalysis = async (force: boolean = false, extraArticles: NewsArticle[] = []) => {
     if (!cleanSym) return;
     setIsLoadingAi(true);
 
     try {
-      const allNewsCombined = [...tavilyArticles, ...scrapedArticles, ...matchingArticles];
+      const allNewsCombined = [...tavilyArticles, ...scrapedArticles, ...extraArticles, ...matchingArticles];
       const analysis = await analyzeEntityBatch({
         entity: cleanSym,
         name: info.name || cleanSym,
@@ -144,35 +143,38 @@ export default function EntityDossierModal({
     }
   };
 
-  // Run AI analysis on modal open
-  useEffect(() => {
-    if (isOpen && cleanSym) {
-      runAiAnalysis(false);
-    }
-  }, [isOpen, cleanSym]);
-
-  // Multi-Engine Web Scraping Trigger (DuckDuckGo + Bing News)
-  const handleTriggerScrape = async () => {
+  // Automated Web Scraping (DuckDuckGo + Bing News) on Modal Open
+  const runAutoWebScrape = async () => {
     if (!cleanSym) return;
     setIsScraping(true);
+    setScrapeCompleted(false);
 
     try {
-      const res = await fetch(`/api/scrape-news?q=${encodeURIComponent(info.name || cleanSym)}&maxResults=10`);
+      const res = await fetch(`/api/scrape-news?q=${encodeURIComponent(info.name || cleanSym)}&maxResults=8`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.articles)) {
+      if (data.success && Array.isArray(data.articles) && data.articles.length > 0) {
         setScrapedArticles(data.articles);
-        setActiveTab('web_scraped');
-        // Refresh AI analysis with freshly scraped intelligence
-        setTimeout(() => runAiAnalysis(true), 300);
+        setScrapeCompleted(true);
+        // Refresh AI synthesis with newly scraped intelligence
+        runAiAnalysis(true, data.articles);
       }
     } catch (e) {
-      console.warn('Scraping failed:', e);
+      console.warn('Auto scraping error:', e);
     } finally {
       setIsScraping(false);
+      setScrapeCompleted(true);
     }
   };
 
-  // Tavily Fresh Search
+  // Run automatically whenever a new entity dossier is opened
+  useEffect(() => {
+    if (isOpen && cleanSym) {
+      runAiAnalysis(false);
+      runAutoWebScrape();
+    }
+  }, [isOpen, cleanSym]);
+
+  // Tavily Fresh Search Trigger
   const fetchTavilyFreshNews = async (force: boolean = false) => {
     if (!cleanSym) return;
     setIsFetchingTavily(true);
@@ -181,7 +183,7 @@ export default function EntityDossierModal({
       const data = await res.json();
       if (data.success && data.articles && data.articles.length > 0) {
         setTavilyArticles(data.articles);
-        setTimeout(() => runAiAnalysis(true), 300);
+        runAiAnalysis(true, data.articles);
       }
     } catch (e) {
       console.warn('Tavily lookup failed:', e);
@@ -192,45 +194,58 @@ export default function EntityDossierModal({
 
   if (!isOpen || !symbol) return null;
 
-  const allArticlesList = [...tavilyArticles, ...scrapedArticles, ...matchingArticles];
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content dossier-modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header Bar */}
-        <div className="modal-header-row">
-          <div className="dossier-header-left">
-            <div className="portfolio-icon-badge" style={{ width: 42, height: 42, borderRadius: 3 }}>
-              {info.isSector ? <BarChart3 size={20} /> : <Landmark size={20} />}
+        
+        {/* Sleek Live Scrape Progress Bar */}
+        {isScraping && (
+          <div className="dossier-live-scrape-bar">
+            <div className="scrape-indicator-pulse" />
+            <Radio size={13} className="scrape-icon-pulse" />
+            <span>LIVE WEB SCRAPE IN PROGRESS: SCANNING DUCKDUCKGO & BING NEWS WIRE...</span>
+          </div>
+        )}
+
+        {/* Modal Header */}
+        <div className="dossier-masthead-header">
+          <div className="dossier-header-identity">
+            <div className="dossier-avatar-badge">
+              {info.isSector ? <BarChart3 size={22} /> : <Landmark size={22} />}
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <h2 className="dossier-symbol-title">
+                <h2 className="dossier-main-symbol">
                   {info.isSector ? '' : '$'}{cleanSym}
                 </h2>
-                <span className="dossier-name-tag">{info.name}</span>
-                {info.isSector && <span className="sector-badge-tag">INDUSTRY SECTOR</span>}
+                <span className="dossier-main-name">{info.name}</span>
+                {info.isSector ? (
+                  <span className="dossier-type-badge sector">SECTOR</span>
+                ) : (
+                  <span className="dossier-type-badge issuer">US FI ISSUER</span>
+                )}
                 {companyCik && (
-                  <span className="cik-badge" title="SEC Central Index Key">
+                  <span className="dossier-cik-pill" title="SEC Central Index Key">
                     <FileText size={11} /> CIK: {companyCik}
                   </span>
                 )}
               </div>
 
-              <p className="dossier-industry-line">
-                {info.industry} • ROLE: SENIOR CREDIT RISK ANALYST & FIXED INCOME STRATEGIST
+              <p className="dossier-sub-role">
+                {info.industry} • <span style={{ color: 'var(--accent-gold)' }}>SENIOR CREDIT RISK & FIXED INCOME STRATEGIST</span>
               </p>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Quick Header Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <button
               onClick={() => {
                 onFilterHomeFeed(cleanSym);
                 onClose();
               }}
-              className="btn-filter-terminal"
+              className="dossier-action-chip"
               title="Filter main terminal wire to this issuer"
             >
               <Search size={13} />
@@ -238,60 +253,59 @@ export default function EntityDossierModal({
             </button>
 
             <button onClick={onClose} className="btn-icon" title="Close" aria-label="Close">
-              <X size={17} />
+              <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* Action Toolbar: Multi-Engine Scraper & Tavily Refresh */}
-        <div className="dossier-action-bar">
+        {/* Intelligence Controls & Action Bar */}
+        <div className="dossier-toolbar-row">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {/* Scrapling Web Scraper Button */}
+            {/* Multi-Engine Web Scrape Button */}
             <button
-              onClick={handleTriggerScrape}
+              onClick={runAutoWebScrape}
               disabled={isScraping}
-              className="btn-tavily-refresh"
-              style={{ background: 'rgba(56, 189, 248, 0.12)', border: '1px solid #38bdf8', color: '#38bdf8' }}
-              title="Scrape DuckDuckGo & Bing News with enterprise politeness"
+              className="dossier-btn-tool scraper"
+              title="Query DuckDuckGo HTML & Bing News with domain politeness"
             >
               <Globe size={13} style={{ animation: isScraping ? 'spin 1s linear infinite' : 'none' }} />
-              <span>{isScraping ? 'SCRAPING DUCKDUCKGO & BING...' : '🌐 MULTI-ENGINE WEB SCRAPE'}</span>
+              <span>{isScraping ? 'SCANNING WEB...' : 'WEB SCRAPE (DDG + BING)'}</span>
             </button>
 
             {/* Tavily Refresh Button */}
             <button
               onClick={() => fetchTavilyFreshNews(true)}
               disabled={isFetchingTavily}
-              className="btn-tavily-refresh"
+              className="dossier-btn-tool tavily"
               title="Deep Search via Tavily Credit Intelligence"
             >
               <Zap size={13} style={{ animation: isFetchingTavily ? 'spin 1s linear infinite' : 'none' }} />
-              <span>{isFetchingTavily ? 'FETCHING TAVILY...' : '⚡ REFRESH VIA TAVILY'}</span>
+              <span>{isFetchingTavily ? 'FETCHING TAVILY...' : 'TAVILY DEEP-DIVE'}</span>
             </button>
 
-            {/* Force AI Refresh */}
+            {/* AI Re-Analyze */}
             <button
               onClick={() => runAiAnalysis(true)}
               disabled={isLoadingAi}
-              className="btn-tavily-refresh"
-              style={{ background: 'rgba(212, 175, 55, 0.12)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)' }}
+              className="dossier-btn-tool ai"
               title="Re-run AI Credit Synthesis"
             >
               <Sparkles size={13} style={{ animation: isLoadingAi ? 'spin 1s linear infinite' : 'none' }} />
-              <span>{isLoadingAi ? 'ANALYZING...' : 'AI REFRESH'}</span>
+              <span>{isLoadingAi ? 'ANALYZING...' : 'AI RE-SYNTHESIZE'}</span>
             </button>
           </div>
 
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            L2 FIRESTORE MEMORY ACTIVE
+          <div className="dossier-memory-badge">
+            <History size={12} />
+            <span>FIRESTORE MEMORY ACTIVE</span>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="dossier-tab-bar">
+        <div className="dossier-tab-row">
           <button
             onClick={() => setActiveTab('credit_dossier')}
-            className={`dossier-tab-btn ${activeTab === 'credit_dossier' ? 'active' : ''}`}
+            className={`dossier-tab-chip ${activeTab === 'credit_dossier' ? 'active' : ''}`}
           >
             <Sparkles size={13} />
             <span>AI CREDIT DOSSIER & ANALYTICS</span>
@@ -300,7 +314,7 @@ export default function EntityDossierModal({
           {!info.isSector && (
             <button
               onClick={() => setActiveTab('sec_filings')}
-              className={`dossier-tab-btn ${activeTab === 'sec_filings' ? 'active' : ''}`}
+              className={`dossier-tab-chip ${activeTab === 'sec_filings' ? 'active' : ''}`}
             >
               <FileText size={13} />
               <span>SEC EDGAR FILINGS ({filings.length})</span>
@@ -309,37 +323,36 @@ export default function EntityDossierModal({
 
           <button
             onClick={() => setActiveTab('news_wire')}
-            className={`dossier-tab-btn ${activeTab === 'news_wire' ? 'active' : ''}`}
+            className={`dossier-tab-chip ${activeTab === 'news_wire' ? 'active' : ''}`}
           >
             <Clock size={13} />
             <span>VERIFIED DISPATCHES ({matchingArticles.length})</span>
           </button>
 
-          {scrapedArticles.length > 0 && (
-            <button
-              onClick={() => setActiveTab('web_scraped')}
-              className={`dossier-tab-btn ${activeTab === 'web_scraped' ? 'active' : ''}`}
-              style={{ color: '#38bdf8' }}
-            >
-              <Globe size={13} />
-              <span>SCRAPED INTEL ({scrapedArticles.length})</span>
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('web_scraped')}
+            className={`dossier-tab-chip ${activeTab === 'web_scraped' ? 'active' : ''}`}
+          >
+            <Globe size={13} />
+            <span>SCRAPED WEB INTEL ({scrapedArticles.length})</span>
+          </button>
         </div>
 
-        {/* Tab 1: AI Credit Risk Analytics & Memory Dashboard */}
+        {/* TAB 1: AI Credit Risk Analytics & Memory Dashboard */}
         {activeTab === 'credit_dossier' && (
-          <div className="dossier-content-body">
+          <div className="dossier-body-scroll">
             {/* Materiality Alert Banner (if notify === true) */}
             {aiAnalysis?.notify && (
-              <div className="dossier-notification-banner">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Bell size={16} color="var(--accent-gold)" />
+              <div className="dossier-alert-banner">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="alert-bell-pulse">
+                    <Bell size={16} />
+                  </div>
                   <div>
-                    <strong style={{ fontSize: '0.82rem', color: 'var(--accent-gold)', textTransform: 'uppercase' }}>
+                    <strong style={{ fontSize: '0.82rem', color: '#f43f5e', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
                       {aiAnalysis.notificationTitle}
                     </strong>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-primary)', marginTop: 2 }}>
+                    <p style={{ fontSize: '0.74rem', color: 'var(--text-primary)', marginTop: 2 }}>
                       {aiAnalysis.notificationBody}
                     </p>
                   </div>
@@ -358,7 +371,7 @@ export default function EntityDossierModal({
                 <div className={`kpi-val ${aiAnalysis?.analytics?.liquidityRisk === 'ELEVATED' ? 'neg' : aiAnalysis?.analytics?.liquidityRisk === 'MODERATE' ? 'neu' : 'pos'}`}>
                   {aiAnalysis?.analytics?.liquidityRisk || 'LOW'}
                 </div>
-                <span className="kpi-sub">Coverage & Cash Reserves</span>
+                <span className="kpi-sub">Coverage & Reserves</span>
               </div>
 
               <div className="dossier-kpi-card">
@@ -369,7 +382,7 @@ export default function EntityDossierModal({
                 <div className={`kpi-val ${aiAnalysis?.analytics?.spreadTrajectory === 'WIDENING' ? 'neg' : aiAnalysis?.analytics?.spreadTrajectory === 'TIGHTENING' ? 'pos' : 'neu'}`}>
                   {aiAnalysis?.analytics?.spreadTrajectory || 'STABLE'}
                 </div>
-                <span className="kpi-sub">IG / HY Secondary Yields</span>
+                <span className="kpi-sub">Secondary Yields</span>
               </div>
 
               <div className="dossier-kpi-card">
@@ -377,10 +390,10 @@ export default function EntityDossierModal({
                   <Scale size={12} />
                   <span>LEVERAGE WATCH</span>
                 </div>
-                <div className="kpi-val pos" style={{ fontSize: '0.85rem' }}>
+                <div className="kpi-val pos" style={{ fontSize: '0.82rem' }}>
                   {aiAnalysis?.analytics?.leverageWatch || 'STABLE (1.2x)'}
                 </div>
-                <span className="kpi-sub">Net Debt / Asset Base</span>
+                <span className="kpi-sub">Net Debt / EBITDA</span>
               </div>
 
               <div className="dossier-kpi-card">
@@ -391,15 +404,17 @@ export default function EntityDossierModal({
                 <div className={`kpi-val ${aiAnalysis?.analytics?.refinancingRisk === 'HIGH' ? 'neg' : aiAnalysis?.analytics?.refinancingRisk === 'MODERATE' ? 'neu' : 'pos'}`}>
                   {aiAnalysis?.analytics?.refinancingRisk || 'LOW'}
                 </div>
-                <span className="kpi-sub">Near-Term Maturity Walls</span>
+                <span className="kpi-sub">Near-Term Maturity</span>
               </div>
             </div>
 
             {/* Executive Synthesis */}
-            <div className="dossier-section-card">
-              <div className="dossier-card-title">
-                <Sparkles size={14} color="var(--accent-gold)" />
-                <span>EXECUTIVE CREDIT RISK SYNTHESIS</span>
+            <div className="dossier-card-panel">
+              <div className="dossier-panel-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Sparkles size={14} color="var(--accent-gold)" />
+                  <span className="panel-title-text">EXECUTIVE CREDIT RISK SYNTHESIS</span>
+                </div>
                 <span className="relevance-score-badge">
                   {aiAnalysis?.relevanceScore || 90}% RELEVANCE
                 </span>
@@ -412,10 +427,12 @@ export default function EntityDossierModal({
             {/* Risk Drivers & Catalysts Two-Column Layout */}
             <div className="dossier-two-col">
               {/* Risk Watchpoints */}
-              <div className="dossier-section-card">
-                <div className="dossier-card-title">
-                  <ShieldAlert size={14} color="#f43f5e" />
-                  <span>KEY RISK DRIVERS & VULNERABILITIES</span>
+              <div className="dossier-card-panel">
+                <div className="dossier-panel-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ShieldAlert size={14} color="#f43f5e" />
+                    <span className="panel-title-text">KEY RISK DRIVERS & WATCHPOINTS</span>
+                  </div>
                 </div>
                 <ul className="dossier-bullet-list">
                   {(aiAnalysis?.keyRiskWatchpoints || [
@@ -429,10 +446,12 @@ export default function EntityDossierModal({
               </div>
 
               {/* Credit Catalysts */}
-              <div className="dossier-section-card">
-                <div className="dossier-card-title">
-                  <CheckCircle2 size={14} color="#10b981" />
-                  <span>POSITIVE CREDIT CATALYSTS</span>
+              <div className="dossier-card-panel">
+                <div className="dossier-panel-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle2 size={14} color="#10b981" />
+                    <span className="panel-title-text">POSITIVE CREDIT CATALYSTS</span>
+                  </div>
                 </div>
                 <ul className="dossier-bullet-list">
                   {(aiAnalysis?.creditCatalysts || [
@@ -446,15 +465,17 @@ export default function EntityDossierModal({
             </div>
 
             {/* Historical Credit Memory Milestones */}
-            <div className="dossier-section-card">
-              <div className="dossier-card-title">
-                <History size={14} color="var(--accent-gold)" />
-                <span>HISTORICAL CREDIT MILESTONES (FIRESTORE MEMORY LAYER)</span>
+            <div className="dossier-card-panel">
+              <div className="dossier-panel-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <History size={14} color="var(--accent-gold)" />
+                  <span className="panel-title-text">HISTORICAL CREDIT MILESTONES (FIRESTORE MEMORY LAYER)</span>
+                </div>
               </div>
 
               {(!aiAnalysis?.historicalMilestones || aiAnalysis.historicalMilestones.length === 0) ? (
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '6px 0' }}>
-                  No historical milestones recorded yet. New material credit events will be automatically remembered here.
+                <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)', padding: '6px 0' }}>
+                  No historical milestones recorded yet. New material credit events will be automatically archived here.
                 </p>
               ) : (
                 <div className="memory-timeline">
@@ -476,9 +497,9 @@ export default function EntityDossierModal({
           </div>
         )}
 
-        {/* Tab 2: SEC EDGAR Filings */}
+        {/* TAB 2: SEC EDGAR Filings */}
         {activeTab === 'sec_filings' && !info.isSector && (
-          <div className="dossier-content-body">
+          <div className="dossier-body-scroll">
             <div className="filings-filter-bar">
               <span className="filings-filter-label">FORM FILTER:</span>
               {['ALL', '10-K', '10-Q', '8-K', '424B2'].map((form) => (
@@ -494,12 +515,12 @@ export default function EntityDossierModal({
 
             {isLoadingFilings ? (
               <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px' }} />
-                <p style={{ fontSize: '0.85rem' }}>FETCHING SEC EDGAR ARCHIVES...</p>
+                <RefreshCw size={22} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px' }} />
+                <p style={{ fontSize: '0.82rem' }}>FETCHING SEC EDGAR ARCHIVES...</p>
               </div>
             ) : filings.length === 0 ? (
               <div className="empty-box-sm">
-                NO SEC FILINGS FOUND FOR CIK: {companyCik || 'UNRESOLVED'}.
+                {filingsNotice || `NO SEC FILINGS FOUND FOR CIK: ${companyCik || 'UNRESOLVED'}.`}
               </div>
             ) : (
               <div className="filings-list">
@@ -538,9 +559,9 @@ export default function EntityDossierModal({
           </div>
         )}
 
-        {/* Tab 3: Verified Dispatches (RSS) */}
+        {/* TAB 3: Verified Dispatches (RSS) */}
         {activeTab === 'news_wire' && (
-          <div className="dossier-content-body">
+          <div className="dossier-body-scroll">
             {matchingArticles.length === 0 ? (
               <div className="empty-box-sm">
                 NO DIRECT DISPATCHES MATCHING THIS ENTITY IN CURRENT WIRE.
@@ -548,7 +569,7 @@ export default function EntityDossierModal({
             ) : (
               <div className="dossier-articles-list">
                 {matchingArticles.map((article) => (
-                  <div key={article.id} className="dossier-article-item">
+                  <div key={article.id} className="dossier-article-card">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span className="dossier-article-source">{article.source}</span>
                       <span className={`badge-sentiment badge-${article.sentiment || 'neutral'}`}>
@@ -559,7 +580,7 @@ export default function EntityDossierModal({
                     <h4 className="dossier-article-title">{article.title}</h4>
                     <p className="dossier-article-desc">{article.description}</p>
 
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                       <button
                         onClick={() => onSelectArticle(article)}
                         className="btn-read btn-read-primary"
@@ -587,48 +608,59 @@ export default function EntityDossierModal({
           </div>
         )}
 
-        {/* Tab 4: Multi-Engine Web Scraped Intel */}
+        {/* TAB 4: Multi-Engine Web Scraped Intel */}
         {activeTab === 'web_scraped' && (
-          <div className="dossier-content-body">
-            <div className="dossier-articles-list">
-              {scrapedArticles.map((article) => (
-                <div key={article.id} className="dossier-article-item">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span className="dossier-article-source" style={{ color: '#38bdf8' }}>
-                      {article.sourceIcon} {article.source}
-                    </span>
-                    <span className={`badge-sentiment badge-${article.sentiment || 'neutral'}`}>
-                      {(article.sentiment || 'neutral').toUpperCase()}
-                    </span>
+          <div className="dossier-body-scroll">
+            {isScraping && scrapedArticles.length === 0 ? (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <RefreshCw size={22} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px', color: '#38bdf8' }} />
+                <p style={{ fontSize: '0.82rem' }}>SCRAPING DUCKDUCKGO & BING NEWS ENGINES...</p>
+              </div>
+            ) : scrapedArticles.length === 0 ? (
+              <div className="empty-box-sm">
+                NO WEB SCRAPED STORIES DETECTED FOR THIS QUERY.
+              </div>
+            ) : (
+              <div className="dossier-articles-list">
+                {scrapedArticles.map((article) => (
+                  <div key={article.id} className="dossier-article-card" style={{ borderColor: 'rgba(56, 189, 248, 0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span className="dossier-article-source" style={{ color: '#38bdf8', fontWeight: 800 }}>
+                        {article.sourceIcon} {article.source}
+                      </span>
+                      <span className={`badge-sentiment badge-${article.sentiment || 'neutral'}`}>
+                        {(article.sentiment || 'neutral').toUpperCase()}
+                      </span>
+                    </div>
+
+                    <h4 className="dossier-article-title">{article.title}</h4>
+                    <p className="dossier-article-desc">{article.description}</p>
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button
+                        onClick={() => onSelectArticle(article)}
+                        className="btn-read btn-read-primary"
+                        style={{ height: 26, fontSize: '0.72rem' }}
+                      >
+                        <BookOpen size={11} />
+                        <span>READER</span>
+                      </button>
+
+                      <a
+                        href={article.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-read"
+                        style={{ height: 26, fontSize: '0.72rem' }}
+                      >
+                        <span>ORIGINAL</span>
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
                   </div>
-
-                  <h4 className="dossier-article-title">{article.title}</h4>
-                  <p className="dossier-article-desc">{article.description}</p>
-
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button
-                      onClick={() => onSelectArticle(article)}
-                      className="btn-read btn-read-primary"
-                      style={{ height: 26, fontSize: '0.72rem' }}
-                    >
-                      <BookOpen size={11} />
-                      <span>READER</span>
-                    </button>
-
-                    <a
-                      href={article.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-read"
-                      style={{ height: 26, fontSize: '0.72rem' }}
-                    >
-                      <span>ORIGINAL</span>
-                      <ExternalLink size={11} />
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

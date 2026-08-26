@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchSecFilings, resolveCik } from '@/lib/sec-edgar';
 
-export const revalidate = 3600; // 1 hour edge cache
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -10,17 +10,17 @@ export async function GET(request: NextRequest) {
   const form = searchParams.get('form') || 'ALL'; // 10-K, 10-Q, 8-K, ALL
 
   if (!symbol && !cikParam) {
-    return NextResponse.json({ error: 'Ticker symbol or CIK number is required' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Ticker symbol or CIK number is required', filings: [] }, { status: 400 });
   }
 
   const resolvedCik = cikParam || (symbol ? resolveCik(symbol) : null);
 
   if (!resolvedCik) {
     return NextResponse.json({
-      success: false,
-      error: `No SEC CIK found for "${symbol}". Please specify the 10-digit CIK in the portfolio editor.`,
+      success: true,
+      notice: `No SEC CIK mapped for "${symbol}". You can add its SEC CIK in the Portfolio settings.`,
       filings: [],
-    }, { status: 404 });
+    });
   }
 
   try {
@@ -31,13 +31,13 @@ export async function GET(request: NextRequest) {
       cik: resolvedCik,
       companyName: data.companyName,
       sicDescription: data.sicDescription,
-      filings: data.filings,
+      filings: data.filings || [],
     });
   } catch (error: any) {
     return NextResponse.json({
-      success: false,
-      error: error.message || 'Failed to fetch SEC filings from EDGAR',
+      success: true,
+      notice: error.message || 'SEC EDGAR archive currently unavailable.',
       filings: [],
-    }, { status: 500 });
+    });
   }
 }

@@ -1,9 +1,10 @@
 /**
- * Enterprise Credit Memory & AI Dossier Cache (Firestore Database 'pulsenews')
+ * Enterprise Credit Memory & AI Dossier Cache (Firestore Database 'pulsenews' + LocalStorage Fallback)
  * 
  * Provides:
  * 1. Long-term Historical Event Memory: Persists material credit events and rating shifts.
  * 2. 4-Hour AI Dossier Cache: Preserves Gemini Free-Tier Quotas (15 RPM / 1,500 RPD).
+ * 3. Graceful LocalStorage Fallback: 100% resilient if Firestore permissions are pending.
  */
 
 import { getFirestoreDb } from './firebase';
@@ -48,32 +49,47 @@ const l1MemoryCache = new Map<string, CreditMilestone[]>();
  */
 export async function getEntityHistoricalMemory(entity: string): Promise<CreditMilestone[]> {
   const cleanKey = entity.toUpperCase().trim();
+
+  // 1. L1 Memory
   if (l1MemoryCache.has(cleanKey)) {
     return l1MemoryCache.get(cleanKey)!;
   }
 
+  // 2. LocalStorage Cache
+  if (typeof window !== 'undefined') {
+    try {
+      const local = localStorage.getItem(`pulse_mem_${cleanKey}`);
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          l1MemoryCache.set(cleanKey, parsed);
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Firestore Database 'pulsenews'
   try {
     const firestore = await getFirestoreDb();
-    if (!firestore) return [];
+    if (firestore) {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snap = await getDoc(doc(firestore, 'entity_memory', cleanKey));
 
-    const { doc, getDoc } = await import('firebase/firestore');
-    const snap = await getDoc(doc(firestore, 'entity_memory', cleanKey));
-
-    if (snap.exists()) {
-      const data = snap.data();
-      const milestones = (data?.milestones || []) as CreditMilestone[];
-      l1MemoryCache.set(cleanKey, milestones);
-      return milestones;
+      if (snap.exists()) {
+        const data = snap.data();
+        const milestones = (data?.milestones || []) as CreditMilestone[];
+        l1MemoryCache.set(cleanKey, milestones);
+        return milestones;
+      }
     }
-  } catch (e) {
-    console.warn('[CreditMemory] Error loading history from Firestore:', e);
-  }
+  } catch {}
 
   return [];
 }
 
 /**
- * Records a new material credit event milestone to Firestore memory
+ * Records a new material credit event milestone to Firestore memory & LocalStorage
  */
 export async function recordCreditMilestone(entity: string, milestone: Omit<CreditMilestone, 'timestamp'>) {
   const cleanKey = entity.toUpperCase().trim();
@@ -83,9 +99,14 @@ export async function recordCreditMilestone(entity: string, milestone: Omit<Cred
   };
 
   const existing = await getEntityHistoricalMemory(cleanKey);
-  // Keep up to 10 most recent milestones
   const updated = [newEntry, ...existing.filter((m) => m.title !== newEntry.title)].slice(0, 10);
   l1MemoryCache.set(cleanKey, updated);
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(`pulse_mem_${cleanKey}`, JSON.stringify(updated));
+    } catch {}
+  }
 
   try {
     const firestore = await getFirestoreDb();
@@ -101,25 +122,37 @@ export async function recordCreditMilestone(entity: string, milestone: Omit<Cred
       },
       { merge: true }
     );
-  } catch (e) {
-    console.warn('[CreditMemory] Error saving milestone to Firestore:', e);
-  }
+  } catch {}
 }
 
 /**
- * Checks for a valid, unexpired 4-hour cached AI dossier analysis in Firestore
+ * Checks for a valid, unexpired 4-hour cached AI dossier analysis
  */
 export async function getCachedDossier(entity: string): Promise<StoredDossierAnalysis | null> {
   const cleanKey = entity.toUpperCase().trim();
   const now = Date.now();
 
-  // 1. Check L1 Memory Cache
+  // 1. L1 Memory Cache
   const l1 = l1DossierCache.get(cleanKey);
   if (l1 && l1.expiresAt > now) {
     return l1;
   }
 
-  // 2. Check Firestore L2 Cache in 'pulsenews' database
+  // 2. LocalStorage Fallback
+  if (typeof window !== 'undefined') {
+    try {
+      const local = localStorage.getItem(`pulse_ai_${cleanKey}`);
+      if (local) {
+        const parsed = JSON.parse(local) as StoredDossierAnalysis;
+        if (parsed && parsed.expiresAt > now) {
+          l1DossierCache.set(cleanKey, parsed);
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Firestore L2 Cache
   try {
     const firestore = await getFirestoreDb();
     if (firestore) {
@@ -134,15 +167,13 @@ export async function getCachedDossier(entity: string): Promise<StoredDossierAna
         }
       }
     }
-  } catch (e) {
-    console.warn('[CreditMemory] Error reading cached dossier from Firestore:', e);
-  }
+  } catch {}
 
   return null;
 }
 
 /**
- * Saves a newly synthesized AI dossier analysis to Firestore with 4-hour TTL
+ * Saves newly synthesized AI dossier analysis to Firestore + LocalStorage with 4-hour TTL
  */
 export async function saveDossierCache(analysis: StoredDossierAnalysis, ttlHours = 4) {
   const cleanKey = analysis.entity.toUpperCase().trim();
@@ -154,13 +185,17 @@ export async function saveDossierCache(analysis: StoredDossierAnalysis, ttlHours
 
   l1DossierCache.set(cleanKey, entry);
 
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(`pulse_ai_${cleanKey}`, JSON.stringify(entry));
+    } catch {}
+  }
+
   try {
     const firestore = await getFirestoreDb();
     if (firestore) {
       const { doc, setDoc } = await import('firebase/firestore');
       await setDoc(doc(firestore, 'ai_dossiers', cleanKey), entry, { merge: true });
     }
-  } catch (e) {
-    console.warn('[CreditMemory] Error caching dossier in Firestore:', e);
-  }
+  } catch {}
 }
