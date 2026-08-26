@@ -139,80 +139,96 @@ export async function analyzeEntityBatch(params: {
   // 2. Fetch Historical Memory Milestones from Firestore 'pulsenews' Database
   const historicalMemory = await getEntityHistoricalMemory(cleanKey);
 
+  const isBDC = ['CCLFX', 'BCSF', 'ARCC', 'OBDC', 'MFIC', 'OTF', 'FBDC', 'SSLP', 'AB-LEND', 'FPCC'].includes(cleanKey);
+  const isPrivateCreditFund = isBDC || name.toLowerCase().includes('lending') || name.toLowerCase().includes('private credit') || name.toLowerCase().includes('credit fund');
+  const isFixedIncomeSector = cleanKey.includes('BOND') || cleanKey.includes('_FI') || cleanKey.includes('HY') || name.toLowerCase().includes('fixed income') || name.toLowerCase().includes('treasury');
+
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-  if (apiKey && (articles.length > 0 || (filings && filings.length > 0))) {
+  if (apiKey && (articles.length > 0 || (filings && filings.length > 0) || historicalMemory.length > 0)) {
     try {
-      const batchPayload = {
-        entity: cleanKey,
-        name: name.toUpperCase(),
-        classification: isSector ? 'INDUSTRY SECTOR' : 'CORPORATE / FIXED INCOME / PRIVATE CREDIT ISSUER',
-        industry: industry || 'US FIXED INCOME & PRIVATE CREDIT',
-        historicalCreditMilestones: historicalMemory.slice(0, 4),
-        recentSECFilings: (filings || []).slice(0, 4).map((f) => ({
-          form: f.form,
-          date: f.filingDate,
-          summary: f.description,
-        })),
-        recentDispatches: articles.slice(0, 10).map((a) => ({
-          title: a.title,
-          source: a.source,
-          date: a.publishedAt,
-          snippet: a.description,
-        })),
-      };
+      const articleLines = articles.slice(0, 12).map((a, i) =>
+        `${i + 1}. [${a.source}${a.publishedAt ? ' | ' + a.publishedAt : ''}] ${a.title}${a.description ? ': ' + a.description.substring(0, 220) : ''}`
+      );
+      const filingLines = (filings || []).slice(0, 5).map(f => `• ${f.form} (${f.filingDate}): ${f.description}`);
+      const historyLines = historicalMemory.slice(0, 4).map(m => `• [${m.materiality}] ${m.date}: ${m.title} — ${m.impactSummary || ''}`);
 
-      const prompt = `You are a Veteran Senior Credit Risk Analyst, US Fixed Income Strategist, and Private Debt Portfolio Manager.
-Analyze this structured entity intelligence batch:
-${JSON.stringify(batchPayload, null, 2)}
+      const entityClass = isBDC ? 'Business Development Company (BDC) / Non-Traded Interval Fund'
+        : isPrivateCreditFund ? 'Private Credit / Middle-Market Direct Lending Fund'
+        : isFixedIncomeSector ? 'US Fixed Income / Bond Market Instrument'
+        : isSector ? 'Industry Sector / Thematic Credit Basket'
+        : 'Corporate Issuer / Credit Entity';
 
-Domain Focus for Private Credit, BDCs, and Interval Funds (such as CCLFX, BCSF, ARCC):
-- Evaluate quarterly tender offers, repurchase demands, liquidity gating risks, and redemption headroom.
-- Evaluate non-accrual loan rates, underlying middle-market sponsor debt performance, and PIK interest income ratios.
-- Evaluate Net Investment Income (NII) dividend coverage, leverage (debt-to-equity/asset ratios), and NAV stability.
+      const sectorGuide = (isBDC || isPrivateCreditFund)
+        ? '\nBDC / PRIVATE CREDIT CRITICAL LENS — address ALL of these:\n- Quarterly tender offer: Is the redemption queue building? Are redemption requests approaching the 5%/quarter statutory cap? Any gating risk?\n- Non-accrual rate: % of portfolio at fair value. Any NEW non-accruals, reversals, or recoveries vs prior quarter?\n- NAV per share: Growing/flat/declining? Sustained erosion >5% is high-risk.\n- NII coverage: NII per share vs dividend per share. Sub-1.0x = distribution cut risk.\n- Leverage: Debt-to-equity ratio vs 1.0x BDC cap. Credit facility draws and covenant headroom.\n- PIK income %, first-lien senior secured %, floating rate loan exposure.\n- Any credit facility amendments, waivers, or new draws?'
+        : isFixedIncomeSector
+        ? '\nFIXED INCOME / RATES CRITICAL LENS:\n- Treasury yield curve (2yr/10yr): Inversion depth or steepening signals.\n- IG OAS and HY OAS spread levels — tightening or widening?\n- Duration risk and Fed rate sensitivity for the portfolio.\n- HY default rate trajectory (Moody\'s / S&P trailing 12-month).\n- Near-term maturity concentration and refinancing wall.'
+        : '\nCORPORATE CREDIT CRITICAL LENS:\n- Net Debt/EBITDA trajectory and covenant headroom.\n- Interest coverage ratio and FCF vs debt service.\n- Debt maturity schedule and refinancing access (1-3 year wall).\n- Any S&P/Moody\'s rating watch/downgrade placements.\n- Capital allocation decisions pressuring the balance sheet.';
 
-Provide a thorough, institutional credit assessment formatted strictly as valid JSON matching this exact schema:
+      const prompt = `You are a Veteran Senior Credit Risk Analyst with 20+ years across US Fixed Income, Private Credit BDCs, and Corporate Debt. Write like a Goldman Sachs / Apollo institutional credit research note.
+
+ENTITY: ${cleanKey} — ${name}
+CLASS: ${entityClass}
+INDUSTRY: ${industry || 'US FIXED INCOME & PRIVATE CREDIT'}
+${sectorGuide}
+
+RECENT NEWS DISPATCHES (${articles.length} total):
+${articleLines.join('\n') || 'No recent news — rely on sector knowledge and historical milestones below.'}
+
+SEC FILINGS:
+${filingLines.join('\n') || 'No recent SEC filings.'}
+
+HISTORICAL CREDIT MILESTONES:
+${historyLines.join('\n') || 'No prior milestones recorded.'}
+
+INSTRUCTIONS — MANDATORY:
+- Be SPECIFIC and QUANTITATIVE. Cite NII coverage ratios, leverage levels, redemption % figures, spread bps, filing dates.
+- DO NOT write generic or placeholder text. Every bullet must contain a concrete, actionable insight with named figures or events.
+- For BDCs: the executiveSummary MUST address redemption queue, non-accrual rate, NII coverage, and NAV trajectory.
+- If news is sparse: apply your expert knowledge of this specific entity's documented credit profile and sector dynamics.
+- recentMaterialTakeaways must cite specific news headlines, filing data, or credit events — not generic statements.
+
+Respond ONLY with valid JSON:
 {
-  "overallSentiment": "positive" | "neutral" | "negative",
-  "relevanceScore": 92,
-  "materiality": "HIGH" | "MEDIUM" | "LOW",
-  "notify": true | false,
-  "notificationTitle": "Brief breaking credit alert headline (max 8 words)",
-  "notificationBody": "One concise sentence on why this is material for debt serviceability / credit spreads.",
+  "overallSentiment": "positive",
+  "relevanceScore": 88,
+  "materiality": "MEDIUM",
+  "notify": false,
+  "notificationTitle": "8 word max headline here",
+  "notificationBody": "One specific sentence on credit materiality.",
   "analytics": {
-    "liquidityRisk": "LOW" | "MODERATE" | "ELEVATED",
-    "spreadTrajectory": "TIGHTENING" | "WIDENING" | "STABLE",
-    "leverageWatch": "e.g. 1.18x Debt/NAV (Monitored) or Stable",
-    "refinancingRisk": "LOW" | "MODERATE" | "HIGH"
+    "liquidityRisk": "LOW",
+    "spreadTrajectory": "STABLE",
+    "leverageWatch": "0.87x Debt/Equity — within 1.0x BDC statutory cap",
+    "refinancingRisk": "LOW"
   },
-  "executiveSummary": "3-4 sentence comprehensive credit risk synthesis covering liquidity, cash flow generation, balance sheet leverage, and current credit spreads.",
-  "redemptionAndLiquidityTakeaway": "2-3 sentences specifically analyzing quarterly tender offers, redemption capacity, liquidity buffers, and distribution durability.",
+  "executiveSummary": "4-5 sentences with specific figures and named events — not generic.",
+  "redemptionAndLiquidityTakeaway": "3-4 sentences. For BDCs: cite tender offer %, redemption queue, undrawn credit lines, distribution coverage. For corporates: FCF vs interest charges, revolver headroom.",
   "recentMaterialTakeaways": [
-    "Material Takeaway 1: Focus on recent earnings/NII or quarterly repurchase update",
-    "Material Takeaway 2: Focus on portfolio quality, non-accruals, or credit facility updates",
-    "Material Takeaway 3: Focus on macro interest rate / yield spread implications"
+    "Cite specific headline/filing: e.g. Per Q2 2025 10-Q, NII of $0.47/share covers $0.40 dividend at 1.18x, signaling distribution durability",
+    "e.g. Non-accrual rate per latest filing increased to 2.1% of fair value (+40bps QoQ) driven by 2 middle-market borrowers in workout",
+    "e.g. Credit facility amended Aug-2025 adding $300M accordion feature, reducing near-term liquidity risk through 2027"
   ],
   "keyRiskWatchpoints": [
-    "Risk watchpoint 1 (e.g. redemption demand spike / maturity schedule)",
-    "Risk watchpoint 2 (e.g. non-accrual loan rate / sponsor distress)",
-    "Risk watchpoint 3 (e.g. covenant cushion under credit facility)"
+    "Specific quantified risk: e.g. Redemption queue at ~3.8% of NAV vs 5% quarterly tender cap; pro-rata protocols activate if demand persists next quarter",
+    "Second specific risk with figures",
+    "Third specific risk"
   ],
   "creditCatalysts": [
-    "Positive catalyst 1 (e.g. strong NII dividend coverage / first-lien senior secured weighting)",
-    "Positive catalyst 2 (e.g. ample undrawn credit lines / stable NAV trajectory)"
+    "Specific catalyst: e.g. 94% first-lien senior secured portfolio with >80% historical recovery rates provides structural downside protection",
+    "Second specific catalyst"
   ]
 }
-
-*Set "notify": true ONLY if "materiality" is "HIGH" (e.g. default threat, major rating downgrade, redemption gating, covenant breach, sudden liquidity shock, or massive M&A leverage spike).`;
+Set "notify": true ONLY if materiality HIGH (redemption gating breach, non-accrual >3%, NAV erosion >5%, covenant breach, rating downgrade to HY/CCC).`;
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' },
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.3, topP: 0.85 },
           }),
         }
       );

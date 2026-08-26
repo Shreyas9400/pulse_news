@@ -33,10 +33,10 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
         setPermission('granted');
         setStatusMessage('Success! Your device is registered for breaking market alerts & portfolio shifts.');
       } else {
-        setStatusMessage('Permission granted or pending. Ensure Firebase environment variables are configured.');
+        setStatusMessage('Push notifications require NEXT_PUBLIC_FIREBASE_API_KEY (starting with AIzaSy...) to be set in your Vercel project environment variables. FCM registration skipped.');
       }
     } catch (e: any) {
-      setStatusMessage(`Error enabling notifications: ${e.message}`);
+      setStatusMessage(`Push notifications are not configured: ${e.message?.replace?.(/\(.*\)/g, '') || 'Firebase API key missing or invalid.'}`);
     } finally {
       setIsSubscribing(false);
     }

@@ -24,6 +24,10 @@ const DEFAULT_PORTFOLIO = ['BCSF', 'US_FIXED_INCOME', 'PRIVATE_CREDIT', 'HIGH_YI
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
 
 export default function HomePage() {
+  // isMounted guard: prevents SSR/client hydration mismatch (#425/#418/#423)
+  // All localStorage-dependent state is deferred until after first client render
+  const [isMounted, setIsMounted] = useState(false);
+
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [stockQuotes, setStockQuotes] = useState<StockQuote[]>([]);
   const [briefing, setBriefing] = useState<DailyBriefing | null>(null);
@@ -64,25 +68,23 @@ export default function HomePage() {
   // Track last news refresh timestamp to prevent duplicate calls
   const lastNewsRefreshRef = useRef<number>(0);
 
-  // Load bookmarks, settings, and portfolio from local storage on mount
+  // Client-only mount: set isMounted to true after first render, load localStorage
+  // This is the canonical fix for React hydration mismatches in Next.js App Router
   useEffect(() => {
+    // Mark as mounted — this is the gate that prevents hydration mismatch
+    setIsMounted(true);
+
     try {
       const storedSettings = localStorage.getItem('pulse_app_settings');
-      if (storedSettings) {
-        setSettings(JSON.parse(storedSettings));
-      }
+      if (storedSettings) setSettings(JSON.parse(storedSettings));
 
       const storedArticles = localStorage.getItem('pulse_saved_articles');
-      if (storedArticles) {
-        setSavedArticles(JSON.parse(storedArticles));
-      }
+      if (storedArticles) setSavedArticles(JSON.parse(storedArticles));
 
       const storedPortfolio = localStorage.getItem('pulse_user_portfolio');
       if (storedPortfolio) {
         const parsed = JSON.parse(storedPortfolio);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setPortfolio(parsed);
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) setPortfolio(parsed);
       }
 
       // Load cloud portfolio from Firebase Firestore database 'pulsenews'
@@ -93,17 +95,18 @@ export default function HomePage() {
         }
       }).catch(() => {});
     } catch {
-      // ignore
+      // ignore localStorage errors
     }
 
-    // Listen for FCM foreground push notifications
+    // Listen for FCM foreground push notifications — only if messaging is configured
     let unsubscribe: any = null;
     listenForFCMForegroundMessages((payload) => {
-      console.log('Foreground FCM received:', payload);
-      alert(`[Market Alert] ${payload.notification?.title}: ${payload.notification?.body}`);
+      if (payload?.notification?.title) {
+        console.log('[FCM] Foreground alert received:', payload.notification.title);
+      }
     }).then((unsub) => {
       unsubscribe = unsub;
-    });
+    }).catch(() => {/* FCM not configured, skip silently */});
 
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
@@ -489,6 +492,21 @@ export default function HomePage() {
     if (activeCategory === 'science') return '🔬 SCIENCE & SPACE BREAKTHROUGHS';
     return 'FRONT PAGE TOP STORIES';
   };
+
+  // SSR skeleton — renders server-side with no dynamic state to prevent hydration mismatch
+  if (!isMounted) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+        <div style={{ height: 40, background: 'var(--bg-card)', borderBottom: '1px solid var(--border-subtle)' }} />
+        <div style={{ height: 80, background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-subtle)' }} />
+        <main className="container" style={{ flex: 1, paddingTop: 14 }}>
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', letterSpacing: '0.08em', fontFamily: 'var(--font-mono, monospace)' }}>
+            INITIALIZING MARKET INTELLIGENCE TERMINAL...
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
