@@ -119,7 +119,7 @@ export default function EntityDossierModal({
     setIsLoadingAi(true);
 
     try {
-      const allNewsCombined = [...tavilyArticles, ...scrapedArticles, ...extraArticles, ...matchingArticles];
+      const allNewsCombined = [...extraArticles, ...scrapedArticles, ...tavilyArticles, ...matchingArticles];
       const analysis = await analyzeEntityBatch({
         entity: cleanSym,
         name: info.name || cleanSym,

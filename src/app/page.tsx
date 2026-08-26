@@ -330,9 +330,15 @@ export default function HomePage() {
     }
   };
 
-  // Compute per-entity news summaries with sentiment
+  // Compute per-entity news summaries with material headline ranking
   const entitySummaries: PortfolioEntitySummary[] = useMemo(() => {
     if (!articles || articles.length === 0) return [];
+
+    const materialKeywords = [
+      'debt', 'earnings', 'credit', 'revenue', 'downgrade', 'upgrade', 'default',
+      'covenant', 'bonds', 'yield', 'acquisition', 'dividend', 'filing', 'results',
+      'cash flow', 'liquidity', 'quarterly', 'profit', 'rating', 'loss'
+    ];
 
     return portfolio.map((symbol) => {
       const meta = getTickerMeta(symbol);
@@ -354,6 +360,28 @@ export default function HomePage() {
         };
       }
 
+      // Rank matching articles by credit materiality & recency
+      const rankedArticles = [...matchingArticles].sort((a, b) => {
+        const textA = `${a.title} ${a.description}`.toLowerCase();
+        const textB = `${b.title} ${b.description}`.toLowerCase();
+
+        let scoreA = 0;
+        let scoreB = 0;
+
+        materialKeywords.forEach((kw) => {
+          if (textA.includes(kw)) scoreA += 2;
+          if (textB.includes(kw)) scoreB += 2;
+        });
+
+        if (a.sentiment === 'negative' || a.sentiment === 'positive') scoreA += 1;
+        if (b.sentiment === 'negative' || b.sentiment === 'positive') scoreB += 1;
+
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return b.timestamp - a.timestamp;
+      });
+
+      const bestArticle = rankedArticles[0];
+
       let posCount = 0;
       let negCount = 0;
       matchingArticles.forEach((a) => {
@@ -368,9 +396,9 @@ export default function HomePage() {
       return {
         symbol,
         sentiment: aggregateSentiment,
-        headline: matchingArticles[0].title.length > 90
-          ? matchingArticles[0].title.substring(0, 87) + '...'
-          : matchingArticles[0].title,
+        headline: bestArticle.title.length > 95
+          ? bestArticle.title.substring(0, 92) + '...'
+          : bestArticle.title,
         newsCount: matchingArticles.length,
       };
     });

@@ -211,6 +211,27 @@ export async function getAggregatedNews({
     }
   }
 
+  // Multi-Engine HTML Scraper Integration (DuckDuckGo + Bing News + Google Realtime Wire)
+  if (stockSymbols && stockSymbols.length > 0) {
+    try {
+      const { scrapeMultiEngineNews } = await import('./html-scraper');
+      const topSymbols = stockSymbols.slice(0, 4);
+      const scrapeTasks = topSymbols.map(async (s) => {
+        const meta = getTickerMeta(s);
+        const q = meta ? `${s} ${meta.name.replace(/company|inc|corp|ltd/gi, '').trim()}` : s;
+        return scrapeMultiEngineNews(q, 4);
+      });
+      const scrapedResults = await Promise.allSettled(scrapeTasks);
+      scrapedResults.forEach((res) => {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          allArticles.unshift(...res.value);
+        }
+      });
+    } catch (e) {
+      console.warn('Scraper integration skipped:', e);
+    }
+  }
+
   // If Tavily API Key is configured, fetch targeted credit news
   const tavilyQuery = query || (stockSymbols && stockSymbols.length > 0 ? stockSymbols.slice(0, 3).join(' ') : (category !== 'all' ? category : ''));
   if (tavilyQuery && (process.env.TAVILY_API_KEY || process.env.NEXT_PUBLIC_TAVILY_API_KEY)) {
