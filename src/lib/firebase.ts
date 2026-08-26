@@ -6,29 +6,29 @@ let dynamicConfig: any = null;
 
 function isValidApiKey(key?: string): boolean {
   if (!key) return false;
-  const clean = key.trim();
-  return clean.length >= 20 && clean.startsWith('AIza') && !clean.includes('placeholder') && !clean.includes('your_');
+  const clean = key.trim().replace(/^["']|["']$/g, '');
+  return clean.length >= 8 && !clean.toLowerCase().includes('placeholder') && !clean.toLowerCase().includes('your_');
 }
 
 export async function getClientFirebaseConfig() {
   if (dynamicConfig) return dynamicConfig;
 
   // 1. First check if bundled via NEXT_PUBLIC_ or direct env
-  if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY) {
     dynamicConfig = {
-      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'pulsenews.firebaseapp.com',
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'pulsenews',
-      databaseId: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || process.env.FIREBASE_DATABASE_ID || 'pulsenews',
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'pulsenews.appspot.com',
-      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+      apiKey: process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'pulsenews.firebaseapp.com',
+      projectId: process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'pulsenews',
+      databaseId: process.env.FIREBASE_DATABASE_ID || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || 'pulsenews',
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'pulsenews.appspot.com',
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.FIREBASE_APP_ID || process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+      vapidKey: process.env.FIREBASE_VAPID_KEY || process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
     };
     return dynamicConfig;
   }
 
-  // 2. If environment variables were set without NEXT_PUBLIC_ prefix, load dynamically from /api/firebase-config
+  // 2. Load dynamically from serverless /api/firebase-config endpoint (supports FIREBASE_API_KEY without NEXT_PUBLIC_)
   if (typeof window !== 'undefined') {
     try {
       const res = await fetch('/api/firebase-config');
@@ -76,7 +76,7 @@ export async function requestFCMToken(): Promise<string | null> {
   try {
     const config = await getClientFirebaseConfig();
     if (!config || !isValidApiKey(config.apiKey)) {
-      console.info('[Firebase FCM] Push notifications require a valid NEXT_PUBLIC_FIREBASE_API_KEY (AIzaSy...) in environment.');
+      console.info('[Firebase FCM] Push notifications require FIREBASE_API_KEY configured in environment variables.');
       return null;
     }
 
@@ -92,11 +92,11 @@ export async function requestFCMToken(): Promise<string | null> {
     const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
 
     messaging = getMessaging(appInstance);
-    const vapidKey = config.vapidKey || process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+    const vapidKey = config.vapidKey || process.env.FIREBASE_VAPID_KEY || process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 
     const token = await getToken(messaging, {
       serviceWorkerRegistration: registration,
-      vapidKey: vapidKey && vapidKey.length > 30 ? vapidKey : undefined,
+      vapidKey: vapidKey && vapidKey.length > 20 ? vapidKey : undefined,
     });
 
     if (token) {
@@ -109,7 +109,8 @@ export async function requestFCMToken(): Promise<string | null> {
       return token;
     }
   } catch (error: any) {
-    console.warn('[Firebase FCM] Token request skipped:', error.message || error);
+    console.warn('[Firebase FCM] Token request status:', error.message || error);
+    throw error;
   }
   return null;
 }

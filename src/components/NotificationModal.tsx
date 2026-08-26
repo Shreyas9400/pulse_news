@@ -33,10 +33,10 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
         setPermission('granted');
         setStatusMessage('Success! Your device is registered for breaking market alerts & portfolio shifts.');
       } else {
-        setStatusMessage('Push notifications require NEXT_PUBLIC_FIREBASE_API_KEY (starting with AIzaSy...) to be set in your Vercel project environment variables. FCM registration skipped.');
+        setStatusMessage('Push notifications require FIREBASE_API_KEY and FIREBASE_PROJECT_ID in your environment variables.');
       }
     } catch (e: any) {
-      setStatusMessage(`Push notifications are not configured: ${e.message?.replace?.(/\(.*\)/g, '') || 'Firebase API key missing or invalid.'}`);
+      setStatusMessage(`Notification setup notice: ${e.message?.replace?.(/\(.*\)/g, '') || 'Unable to register device token.'}`);
     } finally {
       setIsSubscribing(false);
     }
