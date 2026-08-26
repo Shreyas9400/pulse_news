@@ -150,7 +150,11 @@ export default function EntityDossierModal({
     setScrapeCompleted(false);
 
     try {
-      const res = await fetch(`/api/scrape-news?q=${encodeURIComponent(info.name || cleanSym)}&maxResults=8`);
+      const searchQuery = info.isSector
+        ? `${cleanSym} ${info.name}`
+        : `${cleanSym} ${info.name.replace(/company|inc|corp|ltd/gi, '').trim()}`;
+
+      const res = await fetch(`/api/scrape-news?q=${encodeURIComponent(searchQuery)}&maxResults=10`);
       const data = await res.json();
       if (data.success && Array.isArray(data.articles) && data.articles.length > 0) {
         setScrapedArticles(data.articles);
