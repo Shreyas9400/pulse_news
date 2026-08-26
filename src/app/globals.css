@@ -2136,6 +2136,142 @@ input[type="text"],
   border-color: #94a3b8;
 }
 
+/* ==========================================================================
+   AI CREDIT RISK ANALYTICS & HISTORICAL MEMORY STYLES
+   ========================================================================== */
+.dossier-notification-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(18, 25, 39, 0.95) 100%);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.materiality-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 0.04em;
+}
+.materiality-badge.high {
+  background: rgba(244, 63, 94, 0.2);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.dossier-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 640px) {
+  .dossier-kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.dossier-kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.kpi-val {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  margin-bottom: 2px;
+}
+.kpi-val.pos {
+  color: #10b981;
+}
+.kpi-val.neg {
+  color: #f43f5e;
+}
+.kpi-val.neu {
+  color: #cbd5e1;
+}
+
+.kpi-sub {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+.relevance-score-badge {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 1px 5px;
+  border-radius: 2px;
+  margin-left: auto;
+  font-weight: 700;
+}
+
+/* Historical Credit Memory Timeline */
+.memory-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.memory-timeline-item {
+  display: flex;
+  gap: 12px;
+  border-left: 2px solid var(--accent-gold);
+  padding-left: 12px;
+  position: relative;
+}
+
+.memory-date {
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent-gold);
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.memory-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.memory-title {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.memory-desc {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+
 
 
 

@@ -11,6 +11,7 @@ import NewsCard from '@/components/NewsCard';
 import ReaderModal from '@/components/ReaderModal';
 import PortfolioModal from '@/components/PortfolioModal';
 import NotificationModal from '@/components/NotificationModal';
+import SettingsModal, { AppSettings, DEFAULT_SETTINGS } from '@/components/SettingsModal';
 import EntityDossierModal from '@/components/EntityDossierModal';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types';
@@ -22,10 +23,6 @@ import { syncPortfolioToFirebase, loadPortfolioFromFirebase } from '@/lib/firest
 const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD', 'SEMICONDUCTORS', 'AI_CLOUD'];
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
 
-// Auto-refresh intervals (milliseconds)
-const QUOTE_REFRESH_INTERVAL = 45_000;    // 45 seconds for live stock prices
-const NEWS_REFRESH_INTERVAL = 5 * 60_000; // 5 minutes for portfolio news feed
-
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [stockQuotes, setStockQuotes] = useState<StockQuote[]>([]);
@@ -35,6 +32,10 @@ export default function HomePage() {
   const [selectedStockFilter, setSelectedStockFilter] = useState<string | null>(null);
   const [isRefreshingNews, setIsRefreshingNews] = useState(false);
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
+
+  // App Settings state (Default 60 min news refresh, 45s stock price refresh)
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // News Board Filter Bar state
   const [newsEntityFilter, setNewsEntityFilter] = useState<string>('ALL');
@@ -59,9 +60,14 @@ export default function HomePage() {
   // Track last news refresh timestamp to prevent duplicate calls
   const lastNewsRefreshRef = useRef<number>(0);
 
-  // Load bookmarks and portfolio from local storage on mount
+  // Load bookmarks, settings, and portfolio from local storage on mount
   useEffect(() => {
     try {
+      const storedSettings = localStorage.getItem('pulse_app_settings');
+      if (storedSettings) {
+        setSettings(JSON.parse(storedSettings));
+      }
+
       const storedArticles = localStorage.getItem('pulse_saved_articles');
       if (storedArticles) {
         setSavedArticles(JSON.parse(storedArticles));
@@ -99,6 +105,13 @@ export default function HomePage() {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
+
+  const handleUpdateSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    try {
+      localStorage.setItem('pulse_app_settings', JSON.stringify(newSettings));
+    } catch {}
+  };
 
   // Fetch Live Stock Quotes from Yahoo Finance API (Only for actual ticker symbols, excluding pure sectors)
   const fetchLiveQuotes = useCallback(async (customSymbols?: string[]) => {
@@ -173,27 +186,32 @@ export default function HomePage() {
     }
   }, []);
 
-  // Initial load + Auto-refresh intervals for BOTH quotes AND news
+  // Initial load + Dynamic auto-refresh intervals based on Settings (Default 60 min)
   useEffect(() => {
     fetchLiveQuotes();
     fetchNews('portfolio', '', null);
     fetchBriefing();
 
-    // Auto-refresh live stock quotes every 45 seconds
-    const quoteInterval = setInterval(() => fetchLiveQuotes(), QUOTE_REFRESH_INTERVAL);
+    // Auto-refresh live stock quotes (default 45s)
+    const quoteIntervalMs = (settings.quotesRefreshIntervalSeconds || 45) * 1000;
+    const quoteInterval = setInterval(() => fetchLiveQuotes(), quoteIntervalMs);
 
-    // Auto-refresh portfolio news every 5 minutes
-    const newsInterval = setInterval(() => {
-      if (!searchQuery && !selectedStockFilter) {
-        fetchNews('portfolio', '', null);
-      }
-    }, NEWS_REFRESH_INTERVAL);
+    // Auto-refresh portfolio news (default 60 min, or 0 for manual)
+    let newsInterval: any = null;
+    if (settings.newsRefreshIntervalMinutes > 0) {
+      const newsIntervalMs = settings.newsRefreshIntervalMinutes * 60_000;
+      newsInterval = setInterval(() => {
+        if (!searchQuery && !selectedStockFilter) {
+          fetchNews('portfolio', '', null);
+        }
+      }, newsIntervalMs);
+    }
 
     return () => {
       clearInterval(quoteInterval);
-      clearInterval(newsInterval);
+      if (newsInterval) clearInterval(newsInterval);
     };
-  }, [fetchLiveQuotes, fetchNews, fetchBriefing, searchQuery, selectedStockFilter]);
+  }, [fetchLiveQuotes, fetchNews, fetchBriefing, searchQuery, selectedStockFilter, settings]);
 
   // Handle Category selection
   const handleSelectCategory = (cat: CategoryId) => {
@@ -450,6 +468,7 @@ export default function HomePage() {
         savedCount={savedArticles.length}
         onShowSaved={() => handleSelectCategory('saved')}
         onOpenNotifications={() => setIsNotificationModalOpen(true)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
         activeCategory={activeCategory}
       />
 
@@ -509,7 +528,7 @@ export default function HomePage() {
               {selectedStockFilter
                 ? `BOOLEAN QUERY FEEDS & NEWS FOR ${selectedStockFilter}`
                 : activeCategory === 'portfolio'
-                ? `AUTO-SYNCED ACROSS ${portfolio.length} ASSETS & SECTORS • NEWS REFRESHTIME: 5 MIN`
+                ? `AUTO-SYNCED ACROSS ${portfolio.length} ASSETS & SECTORS • SYNC INTERVAL: ${settings.newsRefreshIntervalMinutes > 0 ? `${settings.newsRefreshIntervalMinutes} MIN` : 'MANUAL'}`
                 : `${filteredArticles.length} STORIES REPORTED • CONTINUOUS MONITORING`}
             </p>
           </div>
@@ -622,6 +641,14 @@ export default function HomePage() {
       <NotificationModal
         isOpen={isNotificationModalOpen}
         onClose={() => setIsNotificationModalOpen(false)}
+      />
+
+      {/* Terminal & Sync Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
       />
 
       {/* AI-Generated Entity & Sector Intelligence Dossier Dashboard */}

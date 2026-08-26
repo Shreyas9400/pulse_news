@@ -70,7 +70,7 @@ function cleanDescription(rawHtml?: string): string {
 /**
  * Simple heuristic sentiment indicator (positive/neutral/negative)
  */
-function deriveSentiment(title: string, desc: string): 'positive' | 'neutral' | 'negative' {
+export function deriveSentiment(title: string, desc: string): 'positive' | 'neutral' | 'negative' {
   const combined = (title + ' ' + desc).toLowerCase();
   const positiveWords = ['surge', 'jump', 'gains', 'record high', 'breakthrough', 'profit', 'rally', 'boost', 'soars', 'win', 'success', 'growth', 'optimism', 'advances', 'upgrade'];
   const negativeWords = ['slump', 'crash', 'falls', 'war', 'crisis', 'drop', 'inflation', 'loss', 'recession', 'warning', 'layoffs', 'threat', 'plunge', 'decline', 'attack', 'downgrade', 'default'];

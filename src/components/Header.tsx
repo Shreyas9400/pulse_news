@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Sun, Moon, Sparkles, RefreshCw, Bookmark, Bell, X } from 'lucide-react';
+import { Search, Sun, Moon, Sparkles, RefreshCw, Bookmark, Bell, X, Sliders } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -12,6 +12,7 @@ interface HeaderProps {
   savedCount: number;
   onShowSaved: () => void;
   onOpenNotifications: () => void;
+  onOpenSettings?: () => void;
   activeCategory: string;
 }
 
@@ -24,6 +25,7 @@ export default function Header({
   savedCount,
   onShowSaved,
   onOpenNotifications,
+  onOpenSettings,
   activeCategory,
 }: HeaderProps) {
   const [theme, setTheme] = useState<'dark' | 'light' | 'oled'>('dark');
@@ -63,6 +65,17 @@ export default function Header({
           </div>
 
           <div className="topbar-right">
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="topbar-link-btn"
+                title="Terminal Settings & Sync Frequency"
+              >
+                <Sliders size={13} />
+                <span className="hide-on-mobile-sm">Settings</span>
+              </button>
+            )}
+            <span className="topbar-separator">•</span>
             <button
               onClick={onOpenNotifications}
               className="topbar-link-btn"
@@ -88,6 +101,18 @@ export default function Header({
 
           {/* Desktop & Mobile Top Actions */}
           <div className="masthead-actions">
+            {/* Settings Button */}
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="btn-icon"
+                title="Settings & Refresh Interval"
+                aria-label="Settings"
+              >
+                <Sliders size={17} />
+              </button>
+            )}
+
             {/* Notification Bell */}
             <button
               onClick={onOpenNotifications}
