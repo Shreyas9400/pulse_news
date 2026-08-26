@@ -17,6 +17,10 @@ export interface SecFiling {
 
 // Built-in SEC CIK Directory for major US corporate issuers & FI portfolio names
 export const DEFAULT_CIK_DIRECTORY: Record<string, string> = {
+  CCLFX: '0001735964',
+  BCSF: '0001655505',
+  ARCC: '0001287750',
+  OBDC: '0001655887',
   AAPL: '0000320193',
   MSFT: '0000789019',
   NVDA: '0001045810',

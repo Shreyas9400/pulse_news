@@ -112,6 +112,38 @@ export const SECTOR_DIRECTORY: Record<string, TickerMetadata> = {
 //  STOCKS & CRYPTO (WITH TICKERS)
 // ============================================================================
 export const TICKER_DIRECTORY: Record<string, TickerMetadata> = {
+  CCLFX: {
+    symbol: 'CCLFX',
+    name: 'CLIFFWATER CORPORATE LENDING FUND',
+    aliases: ['CLIFFWATER', 'CCLFX', 'CLIFFWATER INTERVAL FUND', 'CLIFFWATER DIRECT LENDING', 'CLIFFWATER CORPORATE LENDING'],
+    industry: 'PRIVATE CREDIT & INTERVAL FUND',
+    keywords: ['TENDER OFFER', 'REDEMPTION', 'REPURCHASE OFFER', 'INTERVAL FUND', 'DIRECT LENDING', 'MIDDLE MARKET', 'NET ASSET VALUE', 'NAV', 'DISTRIBUTION RATE', 'NON-ACCRUAL'],
+    cik: '0001735964',
+  },
+  BCSF: {
+    symbol: 'BCSF',
+    name: 'BAIN CAPITAL SPECIALTY FINANCE',
+    aliases: ['BAIN CAPITAL SPECIALTY FINANCE', 'BCSF', 'BAIN CAPITAL CREDIT', 'BAIN BDC'],
+    industry: 'PRIVATE CREDIT & BDC',
+    keywords: ['TENDER OFFER', 'REDEMPTION', 'REPURCHASE', 'NON-ACCRUAL', 'NET INVESTMENT INCOME', 'NII', 'DIRECT LENDING', 'MIDDLE MARKET', 'DIVIDEND COVERAGE', 'LEVERAGE'],
+    cik: '0001655505',
+  },
+  ARCC: {
+    symbol: 'ARCC',
+    name: 'ARES CAPITAL CORPORATION',
+    aliases: ['ARES CAPITAL', 'ARES BDC', 'ARCC'],
+    industry: 'PRIVATE CREDIT & BDC',
+    keywords: ['DIRECT LENDING', 'NON-ACCRUAL', 'NET INVESTMENT INCOME', 'DIVIDEND', 'PORTFOLIO YIELD'],
+    cik: '0001287750',
+  },
+  OBDC: {
+    symbol: 'OBDC',
+    name: 'BLUE OWL CAPITAL CORPORATION',
+    aliases: ['BLUE OWL', 'OBDC', 'OWL ROCK'],
+    industry: 'PRIVATE CREDIT & BDC',
+    keywords: ['DIRECT LENDING', 'NON-ACCRUAL', 'REDEMPTION', 'NET INVESTMENT INCOME'],
+    cik: '0001655887',
+  },
   NVDA: {
     symbol: 'NVDA',
     name: 'NVIDIA',

@@ -322,6 +322,64 @@ export default function PortfolioOverview({
           </div>
         </div>
       )}
+
+      {/* SECTION 3: MATERIAL & BREAKING CREDIT INTELLIGENCE RADAR */}
+      {entitySummaries.some((s) => s.newsCount > 0) && (
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+          <div className="portfolio-subheading" style={{ color: 'var(--accent-emerald)', marginBottom: 10 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Sparkles size={13} />
+              <span>MATERIAL & BREAKING CREDIT INTELLIGENCE STREAM</span>
+            </span>
+            <span className="count-pill" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+              HIGH PRIORITY
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+            {entitySummaries.filter((s) => s.newsCount > 0).slice(0, 4).map((s) => {
+              const meta = getTickerMeta(s.symbol);
+              return (
+                <div
+                  key={s.symbol}
+                  onClick={() => onOpenDossier && onOpenDossier(s.symbol)}
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                  className="portfolio-material-card"
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 900, color: 'var(--accent-gold)', fontFamily: 'var(--font-mono)' }}>
+                        {s.symbol} • {meta?.name || s.symbol}
+                      </span>
+                      <span className={`badge-sentiment badge-${s.sentiment}`}>
+                        {s.sentiment.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: '0.76rem', color: 'var(--text-primary)', lineHeight: 1.35, fontWeight: 600 }}>
+                      {s.headline}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                    <span>{s.newsCount} VERIFIED DISPATCHES</span>
+                    <span style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>OPEN DOSSIER →</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
