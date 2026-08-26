@@ -333,7 +333,16 @@ export async function getAggregatedNews({
   // Sort newest first
   deduplicated.sort((a, b) => b.timestamp - a.timestamp);
 
-  return deduplicated.slice(0, limit);
+  const topSlice = deduplicated.slice(0, limit);
+
+  // Single-Batch AI Triage (Sentiment, Materiality, Relevance, Context)
+  try {
+    const { triageNewsArticlesBatch } = await import('./gemini');
+    const triaged = await triageNewsArticlesBatch(topSlice);
+    return triaged;
+  } catch (e) {
+    return topSlice;
+  }
 }
 
 /**

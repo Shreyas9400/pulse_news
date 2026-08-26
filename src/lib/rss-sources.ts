@@ -8,36 +8,44 @@ export interface RssSource {
 }
 
 export const RSS_SOURCES: RssSource[] = [
-  // Yahoo Finance & General Markets
+  // US Fixed Income, Credit Markets & Macro
   {
-    id: 'yahoo-finance-top',
-    name: 'Yahoo Finance',
-    url: 'https://finance.yahoo.com/news/rssindex',
-    category: 'markets',
-    icon: '📈',
-    isFinancialTicker: true,
-  },
-  {
-    id: 'yahoo-finance-stocks',
-    name: 'Yahoo Finance Stocks',
-    url: 'https://finance.yahoo.com/rss/headline?s=^GSPC,^DJI,^IXIC,AAPL,MSFT,NVDA,GOOGL,AMZN,TSLA',
+    id: 'us-fixed-income-wire',
+    name: 'US Fixed Income & Credit Wire',
+    url: 'https://news.google.com/rss/search?q=(Corporate+Bonds+OR+"Treasury+Yields"+OR+"Credit+Spreads"+OR+"Private+Credit"+OR+"High+Yield+Debt"+OR+"Bond+Issuance")&hl=en-US&gl=US&ceid=US:en',
     category: 'markets',
     icon: '📊',
     isFinancialTicker: true,
   },
   {
-    id: 'marketwatch-top',
-    name: 'MarketWatch',
+    id: 'private-credit-bdc-wire',
+    name: 'Private Credit & BDC Wire',
+    url: 'https://news.google.com/rss/search?q=("Private+Credit"+OR+"Direct+Lending"+OR+"BDC"+OR+"Tender+Offer"+OR+"Repurchase+Offer"+OR+"Non-Accrual"+OR+"Cliffwater"+OR+"Bain+Capital+Specialty")&hl=en-US&gl=US&ceid=US:en',
+    category: 'markets',
+    icon: '🏛️',
+    isFinancialTicker: true,
+  },
+  {
+    id: 'yahoo-finance-credit-etfs',
+    name: 'Fixed Income & Bond Markets',
+    url: 'https://finance.yahoo.com/rss/headline?s=HYG,LQD,BND,JNK,^TNX,^TYX',
+    category: 'markets',
+    icon: '📈',
+    isFinancialTicker: true,
+  },
+  {
+    id: 'marketwatch-macro',
+    name: 'MarketWatch Economy & Markets',
     url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories',
     category: 'business',
     icon: '🏛️',
   },
 
-  // INDUSTRY 1: Semiconductors & Chips (Requested by user)
+  // INDUSTRY 1: Semiconductors & Hardware
   {
     id: 'industry-chips',
-    name: 'Semiconductors & Chips',
-    url: 'https://news.google.com/rss/search?q=(Semiconductor+OR+NVIDIA+OR+TSMC+OR+ASML+OR+Intel+OR+AMD+OR+Qualcomm)+AND+(chips+OR+fabrication+OR+wafer+OR+earnings)&hl=en-US&gl=US&ceid=US:en',
+    name: 'Semiconductors & Foundries',
+    url: 'https://news.google.com/rss/search?q=(Semiconductor+OR+TSMC+OR+ASML+OR+Foundry)+AND+(fabrication+OR+wafer+OR+earnings+OR+capacity)&hl=en-US&gl=US&ceid=US:en',
     category: 'industry-chips',
     icon: '⚡',
   },
@@ -46,7 +54,7 @@ export const RSS_SOURCES: RssSource[] = [
   {
     id: 'industry-ai-cloud',
     name: 'AI & Cloud Infrastructure',
-    url: 'https://news.google.com/rss/search?q=(OpenAI+OR+Anthropic+OR+Azure+OR+AWS+OR+"Google+Cloud"+OR+Datacenter)+AND+(AI+OR+LLM+OR+cloud+OR+infrastructure)&hl=en-US&gl=US&ceid=US:en',
+    url: 'https://news.google.com/rss/search?q=(Datacenter+OR+"Cloud+Infrastructure"+OR+"AI+Compute"+OR+Hyperscaler)+AND+(earnings+OR+capex+OR+debt)&hl=en-US&gl=US&ceid=US:en',
     category: 'industry-ai-cloud',
     icon: '🧠',
   },
@@ -54,17 +62,17 @@ export const RSS_SOURCES: RssSource[] = [
   // INDUSTRY 3: EV, Automotive & Clean Energy
   {
     id: 'industry-ev',
-    name: 'EV & Clean Energy',
-    url: 'https://news.google.com/rss/search?q=(Tesla+OR+Rivian+OR+BYD+OR+"Clean+Energy"+OR+Lithium+OR+Battery)+AND+(EV+OR+automotive+OR+deliveries+OR+solar)&hl=en-US&gl=US&ceid=US:en',
+    name: 'Clean Energy & Automotive',
+    url: 'https://news.google.com/rss/search?q=("Clean+Energy"+OR+Renewable+OR+"Grid+Storage"+OR+Automotive)+AND+(debt+OR+earnings+OR+deliveries)&hl=en-US&gl=US&ceid=US:en',
     category: 'industry-ev',
     icon: '🚗',
   },
 
-  // INDUSTRY 4: Fintech, Crypto & Banking
+  // INDUSTRY 4: Fintech, Banking & Lending
   {
     id: 'industry-fintech',
-    name: 'Fintech & Banking',
-    url: 'https://news.google.com/rss/search?q=(Fintech+OR+Banking+OR+"JPMorgan"+OR+"Goldman+Sachs"+OR+Coinbase+OR+Stripe)+AND+(Federal+Reserve+OR+interest+rates+OR+credit)&hl=en-US&gl=US&ceid=US:en',
+    name: 'Banking & Financial Services',
+    url: 'https://news.google.com/rss/search?q=(Banking+OR+"Federal+Reserve"+OR+"Commercial+Lending"+OR+"Credit+Risk")+AND+(interest+rates+OR+deposits+OR+liquidity)&hl=en-US&gl=US&ceid=US:en',
     category: 'industry-fintech',
     icon: '💳',
   },
@@ -73,7 +81,7 @@ export const RSS_SOURCES: RssSource[] = [
   {
     id: 'industry-biotech',
     name: 'Biotech & Pharma',
-    url: 'https://news.google.com/rss/search?q=(Biotech+OR+Pharmaceuticals+OR+"Eli+Lilly"+OR+"Novo+Nordisk"+OR+Pfizer)+AND+(FDA+approval+OR+clinical+trial+OR+drug)&hl=en-US&gl=US&ceid=US:en',
+    url: 'https://news.google.com/rss/search?q=(Biotech+OR+Pharmaceuticals)+AND+(FDA+approval+OR+clinical+trial+OR+revenue)&hl=en-US&gl=US&ceid=US:en',
     category: 'industry-biotech',
     icon: '🧬',
   },
@@ -81,58 +89,26 @@ export const RSS_SOURCES: RssSource[] = [
   // INDUSTRY 6: Cybersecurity & Defense Tech
   {
     id: 'industry-cyber',
-    name: 'Cybersecurity & Defense',
-    url: 'https://news.google.com/rss/search?q=(Cybersecurity+OR+CrowdStrike+OR+"Palo+Alto+Networks"+OR+Defense+OR+Lockheed)+AND+(ransomware+OR+zero-day+OR+contract)&hl=en-US&gl=US&ceid=US:en',
+    name: 'Defense & Aerospace',
+    url: 'https://news.google.com/rss/search?q=("Defense+Contractor"+OR+Aerospace+OR+Cybersecurity)+AND+(contract+OR+procurement+OR+revenue)&hl=en-US&gl=US&ceid=US:en',
     category: 'industry-cyber',
     icon: '🛡️',
   },
 
-  // General Tech
+  // Global Macro & Economy
   {
-    id: 'techcrunch',
-    name: 'TechCrunch',
-    url: 'https://techcrunch.com/feed/',
-    category: 'tech',
-    icon: '⚡',
-  },
-  {
-    id: 'theverge',
-    name: 'The Verge',
-    url: 'https://www.theverge.com/rss/index.xml',
-    category: 'tech',
-    icon: '📱',
-  },
-  {
-    id: 'hackernews',
-    name: 'Hacker News Frontpage',
-    url: 'https://hnrss.org/frontpage',
-    category: 'tech',
-    icon: '💻',
-  },
-
-  // World News
-  {
-    id: 'bbc-world',
-    name: 'BBC News',
-    url: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+    id: 'bbc-business',
+    name: 'BBC Global Business',
+    url: 'https://feeds.bbci.co.uk/news/business/rss.xml',
     category: 'world',
     icon: '🌐',
   },
   {
-    id: 'google-world',
-    name: 'Google World News',
-    url: 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en',
-    category: 'world',
+    id: 'reuters-macro',
+    name: 'Macro Economy News',
+    url: 'https://news.google.com/rss/search?q=(Federal+Reserve+OR+"Treasury+Department"+OR+Inflation+CPI+OR+GDP)+AND+(United+States)&hl=en-US&gl=US&ceid=US:en',
+    category: 'business',
     icon: '🌍',
-  },
-
-  // Science
-  {
-    id: 'phys-org',
-    name: 'Phys.org Science',
-    url: 'https://phys.org/rss-feed/',
-    category: 'science',
-    icon: '🔬',
   },
 ];
 
@@ -148,6 +124,6 @@ export function getCustomSearchRssUrl(query: string): string {
  * Returns Yahoo Finance RSS feed URL for specific stock ticker symbol(s)
  */
 export function getYahooStockRssUrl(symbols: string[]): string {
-  const clean = symbols.map(s => s.trim().toUpperCase()).join(',');
+  const clean = symbols.map((s) => encodeURIComponent(s.trim().toUpperCase())).join(',');
   return `https://finance.yahoo.com/rss/headline?s=${clean}`;
 }

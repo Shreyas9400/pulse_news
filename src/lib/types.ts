@@ -32,6 +32,9 @@ export interface NewsArticle {
   author?: string;
   isSaved?: boolean;
   sentiment?: 'positive' | 'neutral' | 'negative';
+  materiality?: 'HIGH' | 'MEDIUM' | 'LOW';
+  creditContext?: string;
+  relevanceScore?: number;
   summaryBullets?: string[];
   stockTicker?: {
     symbol: string;

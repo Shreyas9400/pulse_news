@@ -324,3 +324,126 @@ export function summarizeArticleLocally(title: string, description: string): str
     'MATERIALITY: Sector-agnostic credit risk surveillance on covenant compliance and rating migration.',
   ];
 }
+
+interface ArticleTriageResult {
+  sentiment: 'positive' | 'neutral' | 'negative';
+  materiality: 'HIGH' | 'MEDIUM' | 'LOW';
+  relevanceScore: number;
+  creditContext: string;
+}
+
+// In-Memory Triage Cache (30 min TTL)
+const triageCache = new Map<string, { result: ArticleTriageResult; expiresAt: number }>();
+
+/**
+ * AI Single-Batch Triage: Evaluates up to 20 articles in a single Gemini call
+ * Outputs accurate credit sentiment, materiality (HIGH/MED/LOW), relevance score, and credit context
+ */
+export async function triageNewsArticlesBatch(articles: NewsArticle[]): Promise<NewsArticle[]> {
+  if (!articles || articles.length === 0) return [];
+
+  const now = Date.now();
+  const unCachedArticles: { article: NewsArticle; index: number }[] = [];
+
+  // Check cache for each article
+  const enrichedArticles = articles.map((art, idx) => {
+    const key = art.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    const cached = triageCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      return {
+        ...art,
+        sentiment: cached.result.sentiment,
+        materiality: cached.result.materiality,
+        relevanceScore: cached.result.relevanceScore,
+        creditContext: cached.result.creditContext,
+      };
+    }
+    unCachedArticles.push({ article: art, index: idx });
+    return { ...art };
+  });
+
+  if (unCachedArticles.length === 0) {
+    return enrichedArticles;
+  }
+
+  const batchToProcess = unCachedArticles.slice(0, 20);
+  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+  if (apiKey && batchToProcess.length > 0) {
+    try {
+      const payload = batchToProcess.map((item, i) => ({
+        id: i,
+        title: item.article.title,
+        source: item.article.source,
+        description: item.article.description?.slice(0, 200) || '',
+      }));
+
+      const prompt = `You are a Veteran Senior Credit Risk Analyst.
+Triage this batch of ${payload.length} news articles for US Fixed Income, Private Credit, and Corporate Debt intelligence:
+${JSON.stringify(payload, null, 2)}
+
+For EACH article, evaluate:
+1. "sentiment": "positive" (deleveraging, rating upgrade, strong NII/cashflow) | "negative" (default, rating downgrade, redemption pressure, non-accrual, legal loss) | "neutral".
+2. "materiality": "HIGH" (critical credit/debt event, bankruptcy, tender offer, 8-K disclosure, major earnings/rating shift) | "MEDIUM" (standard operating performance, industry shift) | "LOW" (generic filler/clickbait).
+3. "relevanceScore": 0 to 100 (score < 40 for irrelevant/clickbait/generic consumer tech news).
+4. "creditContext": A 1-sentence analytical credit takeaway explaining the direct impact on debt serviceability, liquidity, or spreads.
+
+Output strict JSON array:
+[
+  {
+    "id": 0,
+    "sentiment": "positive" | "neutral" | "negative",
+    "materiality": "HIGH" | "MEDIUM" | "LOW",
+    "relevanceScore": 88,
+    "creditContext": "Brief 1-sentence credit takeaway"
+  }
+]`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json' },
+          }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          const parsed = JSON.parse(rawText);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((p) => {
+              const matchedItem = batchToProcess.find((_, i) => i === p.id);
+              if (matchedItem) {
+                const triage: ArticleTriageResult = {
+                  sentiment: p.sentiment || 'neutral',
+                  materiality: p.materiality || 'MEDIUM',
+                  relevanceScore: p.relevanceScore ?? 75,
+                  creditContext: p.creditContext || matchedItem.article.description?.slice(0, 100) || '',
+                };
+
+                const key = matchedItem.article.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+                triageCache.set(key, { result: triage, expiresAt: Date.now() + 30 * 60 * 1000 });
+
+                enrichedArticles[matchedItem.index] = {
+                  ...enrichedArticles[matchedItem.index],
+                  ...triage,
+                };
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[GeminiTriage] Batch triage failed, using fallback:', e);
+    }
+  }
+
+  // Filter out low relevance clickbait (score < 30)
+  return enrichedArticles.filter((a) => a.relevanceScore === undefined || a.relevanceScore >= 30);
+}

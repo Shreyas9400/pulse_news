@@ -42,6 +42,10 @@ export default function HomePage() {
   const [newsSentimentFilter, setNewsSentimentFilter] = useState<'ALL' | 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'>('ALL');
   const [newsSortBy, setNewsSortBy] = useState<'newest' | 'sentiment' | 'relevance'>('newest');
   
+  // Pagination state (Page numbers & Page size)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(12);
+  
   // Local storage state
   const [savedArticles, setSavedArticles] = useState<NewsArticle[]>([]);
   const [portfolio, setPortfolio] = useState<string[]>(DEFAULT_PORTFOLIO);
@@ -447,11 +451,23 @@ export default function HomePage() {
     return list;
   }, [rawDisplayedArticles, newsEntityFilter, newsSentimentFilter, newsSortBy]);
 
+  // Reset pagination on filter or category changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategory, selectedStockFilter, searchQuery, newsEntityFilter, newsSentimentFilter, newsSortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredArticles.length / pageSize));
+  const paginatedArticles = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredArticles.slice(start, start + pageSize);
+  }, [filteredArticles, currentPage, pageSize]);
+
   const handleResetFilters = () => {
     setNewsEntityFilter('ALL');
     setNewsSentimentFilter('ALL');
     setNewsSortBy('newest');
     setSelectedStockFilter(null);
+    setCurrentPage(1);
   };
 
   // Header title generator
@@ -640,19 +656,75 @@ export default function HomePage() {
             )}
           </div>
         ) : (
-          /* Newspaper Style Editorial Grid */
-          <div className="news-grid">
-            {filteredArticles.map((article) => (
-              <NewsCard
-                key={article.id}
-                article={article}
-                isSaved={savedArticles.some((a) => a.id === article.id || a.title === article.title)}
-                onToggleSave={handleToggleSave}
-                onOpenReader={setReaderArticle}
-                onPlayAudio={handlePlayAudio}
-              />
-            ))}
-          </div>
+          <>
+            {/* Newspaper Style Editorial Grid */}
+            <div className="news-grid">
+              {paginatedArticles.map((article) => (
+                <NewsCard
+                  key={article.id}
+                  article={article}
+                  isSaved={savedArticles.some((a) => a.id === article.id || a.title === article.title)}
+                  onToggleSave={handleToggleSave}
+                  onOpenReader={setReaderArticle}
+                  onPlayAudio={handlePlayAudio}
+                />
+              ))}
+            </div>
+
+            {/* Pagination Controls Bar */}
+            {filteredArticles.length > pageSize && (
+              <div className="pagination-bar">
+                <div className="pagination-info">
+                  SHOWING <strong>{(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredArticles.length)}</strong> OF <strong>{filteredArticles.length}</strong> DISPATCHES
+                </div>
+
+                <div className="pagination-controls">
+                  <button
+                    onClick={() => {
+                      setCurrentPage((p) => Math.max(1, p - 1));
+                      window.scrollTo({ top: 400, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === 1}
+                    className="btn-page-nav"
+                  >
+                    ← PREV
+                  </button>
+
+                  <div className="pagination-pills">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                      .map((pageNum, idx, arr) => (
+                        <React.Fragment key={pageNum}>
+                          {idx > 0 && arr[idx - 1] !== pageNum - 1 && (
+                            <span className="pagination-ellipsis">...</span>
+                          )}
+                          <button
+                            onClick={() => {
+                              setCurrentPage(pageNum);
+                              window.scrollTo({ top: 400, behavior: 'smooth' });
+                            }}
+                            className={`btn-page-num ${currentPage === pageNum ? 'active' : ''}`}
+                          >
+                            {pageNum}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setCurrentPage((p) => Math.min(totalPages, p + 1));
+                      window.scrollTo({ top: 400, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === totalPages}
+                    className="btn-page-nav"
+                  >
+                    NEXT →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 
