@@ -37,12 +37,29 @@ export default function PortfolioOverview({
   entitySummaries = [],
   onOpenDossier,
 }: PortfolioOverviewProps) {
-  // Separate stocks (with live price quotes) from pure sectors (industry domains)
-  const stockQuotes = quotes.filter((q) => !isSectorEntity(q.symbol));
+  // Separate stocks from pure sectors strictly based on user's portfolioSymbols
+  const stockSymbols = portfolioSymbols.filter((s) => !isSectorEntity(s));
   const sectorSymbols = portfolioSymbols.filter((s) => isSectorEntity(s));
 
+  // Find user's quotes matching their tracked stock symbols
+  const activeStockQuotes = stockSymbols.map((sym) => {
+    const existing = quotes.find((q) => q.symbol === sym);
+    if (existing) return existing;
+    const meta = getTickerMeta(sym);
+    return {
+      symbol: sym,
+      shortName: meta?.name || sym,
+      price: 0,
+      change: 0,
+      changePercent: 0,
+      formattedPrice: 'LIVE SURVEILLANCE',
+      isPositive: true,
+      sparkline: [10, 10.2, 10.1, 10.3, 10.4],
+    } as StockQuote;
+  });
+
   // Average change for stock assets
-  const validQuotes = stockQuotes.filter((q) => q.price > 0);
+  const validQuotes = activeStockQuotes.filter((q) => q.price > 0);
   const avgChange = validQuotes.length > 0
     ? validQuotes.reduce((acc, q) => acc + q.changePercent, 0) / validQuotes.length
     : 0;
@@ -71,7 +88,7 @@ export default function PortfolioOverview({
           <div>
             <div className="portfolio-title-row">
               <h2 className="portfolio-title">MY TRACKED PORTFOLIO & SECTORS</h2>
-              {stockQuotes.length > 0 && (
+              {activeStockQuotes.length > 0 && (
                 <span className={`portfolio-avg-badge ${isPortfolioPositive ? 'positive' : 'negative'}`}>
                   {isPortfolioPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                   <span>{isPortfolioPositive ? '+' : ''}{avgChange.toFixed(2)}% TODAY</span>
@@ -106,16 +123,16 @@ export default function PortfolioOverview({
         </div>
       </div>
 
-      {/* SECTION 1: STOCKS & CRYPTO WATCHLIST */}
-      {stockQuotes.length > 0 && (
+      {/* SECTION 1: STOCKS & ASSET WATCHLIST */}
+      {activeStockQuotes.length > 0 && (
         <div style={{ marginBottom: sectorSymbols.length > 0 ? 20 : 0 }}>
           <div className="portfolio-subheading">
-            <span>STOCKS & DIGITAL ASSETS</span>
-            <span className="count-pill">{stockQuotes.length}</span>
+            <span>STOCKS & CREDIT ASSETS</span>
+            <span className="count-pill">{activeStockQuotes.length}</span>
           </div>
 
           <div className="portfolio-cards-grid">
-            {stockQuotes.map((quote) => {
+            {activeStockQuotes.map((quote) => {
               const isSelected = selectedSymbolFilter === quote.symbol;
               const meta = getTickerMeta(quote.symbol);
               const entitySummary = entitySummaries.find((s) => s.symbol === quote.symbol);

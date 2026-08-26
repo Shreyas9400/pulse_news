@@ -20,7 +20,7 @@ import { RefreshCw, VolumeX } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
 import { syncPortfolioToFirebase, loadPortfolioFromFirebase } from '@/lib/firestore-sync';
 
-const DEFAULT_PORTFOLIO = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'BTC-USD', 'SEMICONDUCTORS', 'AI_CLOUD'];
+const DEFAULT_PORTFOLIO = ['BCSF', 'US_FIXED_INCOME', 'PRIVATE_CREDIT', 'HIGH_YIELD_BONDS'];
 const DEFAULT_INDICES = ['^GSPC', '^IXIC', '^DJI'];
 
 export default function HomePage() {
@@ -512,7 +512,7 @@ export default function HomePage() {
         {/* Executive Portfolio & Sectors Dashboard Panel */}
         {(activeCategory === 'portfolio' || activeCategory === 'all') && !searchQuery && (
           <PortfolioOverview
-            quotes={userPortfolioQuotes.length > 0 ? userPortfolioQuotes : stockQuotes.filter((q) => !DEFAULT_INDICES.includes(q.symbol))}
+            quotes={userPortfolioQuotes}
             portfolioSymbols={portfolio}
             onOpenManageModal={() => setIsPortfolioModalOpen(true)}
             onSelectSymbolFilter={handleSelectStockFilter}
