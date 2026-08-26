@@ -4,6 +4,12 @@ import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging
 // Cached dynamic config
 let dynamicConfig: any = null;
 
+function isValidApiKey(key?: string): boolean {
+  if (!key) return false;
+  const clean = key.trim();
+  return clean.length >= 20 && clean.startsWith('AIza') && !clean.includes('placeholder') && !clean.includes('your_');
+}
+
 export async function getClientFirebaseConfig() {
   if (dynamicConfig) return dynamicConfig;
 
@@ -28,13 +34,13 @@ export async function getClientFirebaseConfig() {
       const res = await fetch('/api/firebase-config');
       if (res.ok) {
         const data = await res.json();
-        if (data.config && data.config.apiKey) {
+        if (data.config && isValidApiKey(data.config.apiKey)) {
           dynamicConfig = data.config;
           return dynamicConfig;
         }
       }
     } catch (e) {
-      console.warn('[Firebase] Could not fetch server config:', e);
+      // Silent fail
     }
   }
 
@@ -48,34 +54,37 @@ export async function getFirebaseApp(): Promise<FirebaseApp | null> {
   if (typeof window === 'undefined') return null;
 
   const config = await getClientFirebaseConfig();
-  if (!config || !config.apiKey) return null;
+  if (!config || !isValidApiKey(config.apiKey)) return null;
 
-  if (!getApps().length) {
-    app = initializeApp(config);
-  } else {
-    app = getApp();
+  try {
+    if (!getApps().length) {
+      app = initializeApp(config);
+    } else {
+      app = getApp();
+    }
+    return app;
+  } catch (e) {
+    return null;
   }
-  return app;
 }
 
 export async function requestFCMToken(): Promise<string | null> {
   if (typeof window === 'undefined' || !('Notification' in window)) {
-    console.warn('Notifications are not supported in this browser environment.');
     return null;
   }
 
   try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.warn('Notification permission was not granted.');
+    const config = await getClientFirebaseConfig();
+    if (!config || !isValidApiKey(config.apiKey)) {
+      console.info('[Firebase FCM] Push notifications require a valid NEXT_PUBLIC_FIREBASE_API_KEY (AIzaSy...) in environment.');
       return null;
     }
 
     const appInstance = await getFirebaseApp();
-    const config = await getClientFirebaseConfig();
+    if (!appInstance) return null;
 
-    if (!appInstance || !config) {
-      console.warn('Firebase configuration is missing or invalid.');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
       return null;
     }
 
@@ -87,11 +96,11 @@ export async function requestFCMToken(): Promise<string | null> {
 
     const token = await getToken(messaging, {
       serviceWorkerRegistration: registration,
-      vapidKey: vapidKey || undefined,
+      vapidKey: vapidKey && vapidKey.length > 30 ? vapidKey : undefined,
     });
 
     if (token) {
-      // Send token to our serverless backend to subscribe device
+      // Send token to serverless backend to subscribe device
       await fetch('/api/notifications/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,44 +108,43 @@ export async function requestFCMToken(): Promise<string | null> {
       });
       return token;
     }
-  } catch (error) {
-    console.error('Error getting FCM token:', error);
+  } catch (error: any) {
+    console.warn('[Firebase FCM] Token request skipped:', error.message || error);
   }
   return null;
 }
 
 export async function listenForFCMForegroundMessages(callback: (payload: any) => void) {
   if (typeof window === 'undefined') return () => {};
-  const appInstance = await getFirebaseApp();
-  if (!appInstance) return () => {};
-
   try {
-    messaging = getMessaging(appInstance);
-    return onMessage(messaging, (payload) => {
+    const appInstance = await getFirebaseApp();
+    if (!appInstance) return () => {};
+
+    const msgInstance = getMessaging(appInstance);
+    return onMessage(msgInstance, (payload) => {
       callback(payload);
     });
-  } catch {
+  } catch (e) {
     return () => {};
   }
 }
 
-/**
- * Initializes and exports Firestore Database with support for custom named database 'pulsenews'
- */
-export async function getFirestoreDb() {
-  if (typeof window === 'undefined') return null;
-  const appInstance = await getFirebaseApp();
-  if (!appInstance) return null;
+// Named Firestore Database Initializer ('pulsenews')
+let firestoreDb: any = null;
 
-  const config = await getClientFirebaseConfig();
-  const dbId = config?.databaseId || 'pulsenews';
+export async function getFirestoreDb(): Promise<any> {
+  if (typeof window === 'undefined') return null;
 
   try {
-    const { getFirestore } = await import('firebase/firestore');
-    // Connect to the specific database 'pulsenews' created by the user
-    return getFirestore(appInstance, dbId);
-  } catch (err) {
-    console.warn('[Firebase] Could not initialize Firestore database:', err);
+    const appInstance = await getFirebaseApp();
+    if (!appInstance) return null;
+
+    if (!firestoreDb) {
+      const { getFirestore } = await import('firebase/firestore');
+      firestoreDb = getFirestore(appInstance, 'pulsenews');
+    }
+    return firestoreDb;
+  } catch (e) {
     return null;
   }
 }
