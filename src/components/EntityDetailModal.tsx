@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, CheckCircle2, HelpCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle2, HelpCircle, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { CanonicalIntelligenceEvent, DeltaStoryItem } from '@/lib/types';
 import { humanizeEntityTokens } from '@/lib/risk-presentation';
 import { ChangeItem } from './IntelligenceBriefing';
@@ -23,8 +23,11 @@ export default function EntityDetailModal({ item, onClose, onOpenResearchTrace }
   const openQuestions = eventRaw?.openQuestions || [];
   const adversarialPassed = eventRaw?.adversarialCheck?.passed;
 
-  const primarySources = deltaRaw?.primarySourcesCount;
-  const totalSources = deltaRaw?.totalSourcesCount ?? eventRaw?.evidenceIds.length;
+  const primarySources =
+    item.sources.length > 0
+      ? item.sources.filter((s) => s.tier === 'TIER_1_PRIMARY').length
+      : deltaRaw?.primarySourcesCount;
+  const totalSources = deltaRaw?.totalSourcesCount ?? eventRaw?.sources?.length;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -108,6 +111,30 @@ export default function EntityDetailModal({ item, onClose, onOpenResearchTrace }
           </div>
         )}
 
+        {item.sources.length > 0 && (
+          <div className="detail-section">
+            <div className="detail-section-title">Sources</div>
+            {item.sources.map((src, i) => (
+              <a
+                key={i}
+                href={src.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="detail-source-link"
+              >
+                <ExternalLink size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+                <span className="detail-source-body">
+                  <span className="detail-source-publisher">{src.publisher}</span>
+                  {src.tier === 'TIER_1_PRIMARY' && <span className="detail-source-tier">PRIMARY</span>}
+                  <span className="detail-source-date">
+                    {new Date(src.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+
         <div className="detail-section">
           <div className="detail-section-title">Evidence</div>
           <div className="detail-evidence-row">
@@ -118,7 +145,7 @@ export default function EntityDetailModal({ item, onClose, onOpenResearchTrace }
               </div>
             )}
             <div className="detail-evidence-stat">
-              <span className="detail-evidence-num">{totalSources ?? 0}</span>
+              <span className="detail-evidence-num">{item.sources.length || totalSources || 0}</span>
               <span className="detail-evidence-label">Independent Sources</span>
             </div>
             {adversarialPassed !== undefined && (

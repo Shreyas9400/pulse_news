@@ -138,9 +138,19 @@ export function humanizeEntityTokens(text: string): string {
     .trim();
 }
 
-/** Strips repeated "ENT_" prefixes from a canonical entity id and spaces out the remainder. */
+/**
+ * Strips internal id decoration from a canonical entity id and renders it as a clean
+ * display label — removes the ENT_ prefix, the PRIV_ private-fund marker, trailing
+ * underscores, and collapses separators into spaces.
+ */
 export function humanizeEntityId(entityId: string): string {
-  return entityId.replace(/^(?:ENT_)+/, '').replace(/_/g, ' ');
+  return entityId
+    .replace(/^(?:ENT_)+/, '')
+    .replace(/^PRIV_/, '')
+    .replace(/_+$/, '')
+    .replace(/_/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 export function riskStateForSymbol(

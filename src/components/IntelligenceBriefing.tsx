@@ -26,6 +26,8 @@ import {
 
 export type ChangeMetric = { label: string; from?: string; to: string };
 
+export type ChangeSource = { url: string; publisher: string; title: string; publishedAt: string; tier: string };
+
 export type ChangeItem = {
   id: string;
   entityLabel: string;
@@ -39,6 +41,7 @@ export type ChangeItem = {
   riskState: RiskState;
   nextTrigger?: string;
   metrics: ChangeMetric[];
+  sources: ChangeSource[];
   kind: 'event' | 'delta';
   raw: CanonicalIntelligenceEvent | DeltaStoryItem;
 };
@@ -61,9 +64,10 @@ interface IntelligenceBriefingProps {
 function eventToChangeItem(event: CanonicalIntelligenceEvent): ChangeItem {
   const riskState = riskStateFromMateriality(event.materiality);
   const rawNextTrigger =
-    event.openQuestions && event.openQuestions.length > 0
+    event.nextTrigger ||
+    (event.openQuestions && event.openQuestions.length > 0
       ? event.openQuestions[0]
-      : event.adversarialCheck?.counterHypothesis || undefined;
+      : event.adversarialCheck?.counterHypothesis || undefined);
   const nextTrigger = rawNextTrigger ? humanizeEntityTokens(rawNextTrigger) : undefined;
 
   return {
@@ -83,6 +87,7 @@ function eventToChangeItem(event: CanonicalIntelligenceEvent): ChangeItem {
       from: m.previousValue !== undefined ? String(m.previousValue) : undefined,
       to: String(m.currentValue),
     })),
+    sources: event.sources || [],
     kind: 'event',
     raw: event,
   };
@@ -102,6 +107,7 @@ function deltaToChangeItem(story: DeltaStoryItem): ChangeItem {
     riskState,
     nextTrigger: story.whatWouldChangeOurView ? humanizeEntityTokens(story.whatWouldChangeOurView) : undefined,
     metrics: [],
+    sources: [],
     kind: 'delta',
     raw: story,
   };
@@ -291,6 +297,18 @@ export default function IntelligenceBriefing({
                   <span className={`tone-${item.riskState.tone}`}>{item.confidenceText}</span>
                   <span className="dot-sep">·</span>
                   <span style={{ color: 'var(--text-muted)' }}>{item.materialityText}</span>
+                  {item.sources.length > 0 && (
+                    <>
+                      <span className="dot-sep">·</span>
+                      <span style={{ color: 'var(--text-muted)', textTransform: 'none', fontWeight: 600 }}>
+                        {item.sources
+                          .slice(0, 2)
+                          .map((s) => s.publisher)
+                          .join(', ')}
+                        {item.sources.length > 2 && ` +${item.sources.length - 2}`}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

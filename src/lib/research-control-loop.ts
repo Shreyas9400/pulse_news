@@ -18,8 +18,10 @@ import { evaluateResearchCompleteness } from './senior-researcher';
 import { challengePreliminaryConclusion } from './adversarial-engine';
 import { synthesizeCrossPortfolioPatterns } from './cross-entity-engine';
 import { getEntityKnowledgeState, commitStateTransition, calculateKnowledgeDelta } from './knowledge-engine';
-import { processEvidenceIntoEvent, getAllCanonicalEvents } from './event-engine';
+import { buildEventFromAnalysis, getAllCanonicalEvents } from './event-engine';
+import { analyzeEvidenceForEntity } from './analysis-engine';
 import { assessEventMateriality, getEscalationRequirement } from './materiality-engine';
+import { EvidenceItem } from './types';
 import { resolveCanonicalEntity } from './entity-resolver';
 import { getPortfolioIntelligenceProfile } from './expertise-engine';
 
@@ -119,6 +121,11 @@ export class ResearchControlLoop {
     const deltaStories: DeltaStoryItem[] = [];
     const quietEntities: QuietEntityReport[] = [];
 
+    // Evidence is accumulated per entity across all its tasks, then reasoned over in a
+    // single analyst pass — analysis needs the whole picture for an entity, not one
+    // disconnected snippet at a time.
+    const evidenceByEntity = new Map<string, EvidenceItem[]>();
+
     while (board.taskQueue.length > 0 && board.budget.queriesExecuted < board.budget.maxQueries) {
       // Sort by priorityScore (Information Gain economics)
       board.taskQueue.sort((a, b) => b.priorityScore - a.priorityScore);
@@ -127,11 +134,77 @@ export class ResearchControlLoop {
       // Execute worker
       const executionResult = await ResearchWorkers.executeTask(activeTask, board);
 
-      // Process new evidence into Canonical Events
-      for (const ev of executionResult.evidenceCollected) {
-        const { event, isNewEvent, isNewSource } = processEvidenceIntoEvent(ev, activeTask.entityId, params.portfolioId);
-        
-        // Assess contextual materiality
+      const bucket = evidenceByEntity.get(activeTask.entityId) || [];
+      bucket.push(...executionResult.evidenceCollected);
+      evidenceByEntity.set(activeTask.entityId, bucket);
+
+      // Escalate to primary sources when a high-authority secondary signal appears but
+      // no regulatory filing has been pulled for this entity yet.
+      const hasPrimary = bucket.some((e) => e.sourceTier === 'TIER_1_PRIMARY');
+      const hasStrongSignal = executionResult.evidenceCollected.some((e) => e.specificityScore >= 75);
+      if (
+        hasStrongSignal &&
+        !hasPrimary &&
+        activeTask.taskType !== 'PRIMARY_SOURCE' &&
+        activeTask.depth < board.budget.maxDepth
+      ) {
+        board.taskQueue.push(
+          createResearchTask({
+            runId,
+            entityId: activeTask.entityId,
+            taskType: 'PRIMARY_SOURCE',
+            question: `SEC EDGAR regulatory filing verification for ${activeTask.entityId}`,
+            perspective: 'PRIMARY_SOURCE',
+            materialityEstimate: 75,
+            expectedInformationGain: 90,
+            depth: activeTask.depth + 1,
+            parentTaskId: activeTask.taskId,
+          })
+        );
+      }
+
+      // Check stopping condition
+      board.budget.elapsedMs = Date.now() - startTimeMs;
+      if (board.budget.elapsedMs > board.budget.timeBudgetMs) {
+        board.status = 'CONVERGING';
+        break;
+      }
+    }
+
+    // 4b. Senior analyst reasoning pass — one per entity, in parallel.
+    // Immaterial noise (marketing pages, explainers, directory listings) is dropped here
+    // rather than padding the briefing.
+    const analysisResults = await Promise.all(
+      Array.from(evidenceByEntity.entries()).map(async ([entityId, evidenceList]) => {
+        const canonical = resolveCanonicalEntity(entityId);
+        const kState = await getEntityKnowledgeState(canonical.id);
+        const analyses = await analyzeEvidenceForEntity({
+          entityName: canonical.canonicalName,
+          entityTicker: canonical.primaryTicker,
+          domain: profile.primaryDomain,
+          evidence: evidenceList,
+          priorStateSummary: kState.currentBeliefs.statusSummary,
+          monitoringQuestions: kState.currentBeliefs.monitoringQuestions,
+        });
+        return { entityId, analyses, evidenceCount: evidenceList.length };
+      })
+    );
+
+    for (const { entityId, analyses, evidenceCount } of analysisResults) {
+      const canonical = resolveCanonicalEntity(entityId);
+
+      // Record what the analyst rejected, for the research trace
+      if (analyses.length === 0 && evidenceCount > 0) {
+        board.whyExcluded.push({
+          itemTitle: `${canonical.canonicalName}: ${evidenceCount} sources reviewed`,
+          reason: 'LOW_MATERIALITY',
+        });
+      }
+
+      for (const analysis of analyses) {
+        const { event } = buildEventFromAnalysis(analysis, entityId, params.portfolioId);
+
+        // Re-weight the analyst's materiality by this specific portfolio's exposure
         event.materiality = assessEventMateriality({
           event,
           portfolioProfile: profile,
@@ -141,30 +214,6 @@ export class ResearchControlLoop {
         if (!extractedEvents.some((e) => e.eventId === event.eventId)) {
           extractedEvents.push(event);
         }
-
-        // Primary Escalation Check: If materiality >= 70 and not yet verified by primary source, queue primary task
-        const escalation = getEscalationRequirement(event.materiality.materialityScore);
-        if (escalation.requirePrimarySource && activeTask.taskType !== 'PRIMARY_SOURCE' && activeTask.depth < board.budget.maxDepth) {
-          const primaryTask = createResearchTask({
-            runId,
-            entityId: activeTask.entityId,
-            taskType: 'PRIMARY_SOURCE',
-            question: `SEC EDGAR regulatory filing verification for ${activeTask.entityId}`,
-            perspective: 'PRIMARY_SOURCE',
-            materialityEstimate: event.materiality.materialityScore,
-            expectedInformationGain: 90,
-            depth: activeTask.depth + 1,
-            parentTaskId: activeTask.taskId,
-          });
-          board.taskQueue.push(primaryTask);
-        }
-      }
-
-      // Check stopping condition
-      board.budget.elapsedMs = Date.now() - startTimeMs;
-      if (board.budget.elapsedMs > board.budget.timeBudgetMs) {
-        board.status = 'CONVERGING';
-        break;
       }
     }
 
@@ -207,17 +256,18 @@ export class ResearchControlLoop {
             title: primaryEvent.title,
             entityId: canonical.id,
             entityName: canonical.canonicalName,
-            whatChanged: delta.deltaSummary,
-            whyItMatters: primaryEvent.summary,
-            portfolioImpact: primaryEvent.implications[0] || 'Continuous operational surveillance active.',
+            whatChanged: primaryEvent.summary,
+            whyItMatters: primaryEvent.implications[0] || primaryEvent.materiality.reasoning,
+            portfolioImpact: primaryEvent.implications[0] || primaryEvent.materiality.reasoning,
             confidenceScore: primaryEvent.confidenceScore,
             materialityScore: primaryEvent.materiality.materialityScore,
             riskDirection: primaryEvent.materiality.riskDirection,
             facts: primaryEvent.facts,
             inferences: primaryEvent.implications,
-            whatWouldChangeOurView: challenge.mitigationQuestions[0] || 'Receipt of audited interim regulatory filings.',
-            primarySourcesCount: primaryEvent.evidenceIds.length,
-            totalSourcesCount: primaryEvent.evidenceIds.length,
+            whatWouldChangeOurView:
+              primaryEvent.nextTrigger || challenge.mitigationQuestions[0] || 'Receipt of audited interim regulatory filings.',
+            primarySourcesCount: primaryEvent.sources.filter((s) => s.tier === 'TIER_1_PRIMARY').length,
+            totalSourcesCount: primaryEvent.sources.length,
             researchRunId: runId,
           });
 

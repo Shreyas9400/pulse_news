@@ -12,6 +12,7 @@ import {
   EventLifecycleState,
 } from './types';
 import { resolveCanonicalEntity } from './entity-resolver';
+import { AnalyzedEvent, materialityFromAnalysis } from './analysis-engine';
 
 // In-memory canonical event store (L1 cache)
 const L1_EVENT_STORE = new Map<string, CanonicalIntelligenceEvent>();
@@ -43,82 +44,39 @@ export function generateEventClusterKey(entityId: string, title: string, text: s
 }
 
 /**
- * Extracts quantitative metric deltas from evidence text
+ * Builds (or merges into) a canonical event from a fully analyzed development.
+ *
+ * This is the production path: every user-visible field comes from the analysis
+ * engine's reasoning over evidence, never from raw scraped text or a template.
  */
-export function extractMetricDeltas(text: string): MetricDelta[] {
-  const deltas: MetricDelta[] = [];
-
-  // Match redemption / repurchase percentages
-  const redemptionMatch = text.match(/redemption[s]?\s*(?:of|requests|demand)?\s*(?:reached|rose to|at|were)?\s*(\d+(?:\.\d+)?%)/i);
-  if (redemptionMatch) {
-    deltas.push({
-      metricName: 'Redemption Demand',
-      currentValue: redemptionMatch[1],
-      unit: '%',
-    });
-  }
-
-  // Match repurchase capacity percentages
-  const repurchaseMatch = text.match(/repurchase[s]?\s*(?:capped at|capacity|limit)?\s*(\d+(?:\.\d+)?%)/i);
-  if (repurchaseMatch) {
-    deltas.push({
-      metricName: 'Repurchase Capacity',
-      currentValue: repurchaseMatch[1],
-      unit: '%',
-    });
-  }
-
-  // Match non-accrual percentages
-  const nonAccrualMatch = text.match(/non-accrual[s]?\s*(?:rate|at|of)?\s*(\d+(?:\.\d+)?%)/i);
-  if (nonAccrualMatch) {
-    deltas.push({
-      metricName: 'Non-Accrual Rate',
-      currentValue: nonAccrualMatch[1],
-      unit: '%',
-    });
-  }
-
-  // Match NAV figures
-  const navMatch = text.match(/NAV\s*(?:of|per share|at)?\s*\$?(\d+(?:\.\d+)?)/i);
-  if (navMatch) {
-    deltas.push({
-      metricName: 'Net Asset Value',
-      currentValue: `$${navMatch[1]}`,
-      unit: 'USD',
-    });
-  }
-
-  return deltas;
-}
-
-/**
- * Evaluates candidate evidence and either attaches it to an ongoing canonical event or creates a new canonical event
- */
-export function processEvidenceIntoEvent(
-  evidence: EvidenceItem,
+export function buildEventFromAnalysis(
+  analysis: AnalyzedEvent,
   entityId: string,
   portfolioId: string
-): { event: CanonicalIntelligenceEvent; isNewEvent: boolean; isNewSource: boolean } {
+): { event: CanonicalIntelligenceEvent; isNewEvent: boolean } {
   const canonicalEntity = resolveCanonicalEntity(entityId);
-  const clusterKey = generateEventClusterKey(canonicalEntity.id, evidence.sourceName, evidence.snippet);
-  
+  const clusterKey = generateEventClusterKey(canonicalEntity.id, analysis.headline, analysis.whatChanged);
   const existingEvent = L1_EVENT_STORE.get(clusterKey);
-  const extractedMetrics = extractMetricDeltas(evidence.snippet);
 
-  // 1. If an existing event exists within the same cluster
+  const latestPublishedAt =
+    analysis.sources
+      .map((s) => s.publishedAt)
+      .sort()
+      .reverse()[0] || new Date().toISOString();
+
+  // Merge into an ongoing event: accumulate sources and roll metrics forward as deltas
   if (existingEvent) {
-    const isNewSource = !existingEvent.evidenceIds.includes(evidence.id);
-    if (isNewSource) {
-      existingEvent.evidenceIds.push(evidence.id);
-      existingEvent.lastEvidenceAt = evidence.publishedAt;
+    for (const src of analysis.sources) {
+      if (!existingEvent.sources.some((s) => s.url === src.url)) {
+        existingEvent.sources.push(src);
+      }
     }
 
-    // Check if new metrics represent an incremental delta (e.g. 17% -> 19%)
     let hasMetricDelta = false;
-    for (const m of extractedMetrics) {
+    for (const m of analysis.metrics) {
       const existingMetric = existingEvent.metrics.find((em) => em.metricName === m.metricName);
       if (existingMetric) {
-        if (existingMetric.currentValue !== m.currentValue) {
+        if (String(existingMetric.currentValue) !== String(m.currentValue)) {
           existingMetric.previousValue = existingMetric.currentValue;
           existingMetric.currentValue = m.currentValue;
           hasMetricDelta = true;
@@ -129,69 +87,72 @@ export function processEvidenceIntoEvent(
       }
     }
 
-    if (hasMetricDelta) {
-      existingEvent.lifecycleState = 'EVIDENCE_ACCUMULATING';
-      existingEvent.summary += ` [Updated: ${evidence.snippet.slice(0, 100)}]`;
+    // A materially stronger read supersedes the prior summary
+    if (analysis.materialityScore > existingEvent.materiality.materialityScore) {
+      existingEvent.title = analysis.headline;
+      existingEvent.summary = analysis.whatChanged;
+      existingEvent.materiality = materialityFromAnalysis(analysis);
+      existingEvent.confidenceScore = analysis.confidenceScore;
+      existingEvent.implications = [analysis.whyItMatters];
+      existingEvent.openQuestions = analysis.openQuestions;
+      existingEvent.nextTrigger = analysis.nextTrigger;
     }
 
-    return { event: existingEvent, isNewEvent: false, isNewSource };
+    existingEvent.lastEvidenceAt = latestPublishedAt;
+    existingEvent.lifecycleState = hasMetricDelta ? 'EVIDENCE_ACCUMULATING' : existingEvent.lifecycleState;
+
+    return { event: existingEvent, isNewEvent: false };
   }
 
-  // 2. Otherwise create a brand new Canonical Intelligence Event
-  const eventId = `evt_${canonicalEntity.id.toLowerCase()}_${Date.now().toString(36)}`;
-  
-  const initialFact: EpistemicClaim = {
-    id: `claim_${Date.now()}_1`,
-    entityId: canonicalEntity.id,
-    type: evidence.evidenceType === 'PRIMARY_FACT' ? 'OBSERVED_FACT' : 'SUPPORTED_INFERENCE',
-    statement: evidence.snippet.slice(0, 200),
-    supportingEvidenceIds: [evidence.id],
-    confidence: evidence.authorityScore,
-    provenance: `${evidence.sourceName} (${evidence.publisher})`,
-  };
+  const eventId = `evt_${canonicalEntity.id.toLowerCase()}_${Date.now().toString(36)}_${Math.random()
+    .toString(36)
+    .slice(2, 5)}`;
 
-  const defaultMateriality: MaterialityAssessment = {
-    materialityScore: evidence.authorityScore > 80 ? 78 : 55,
-    confidenceScore: evidence.authorityScore,
-    riskDirection: evidence.snippet.toLowerCase().includes('default') || evidence.snippet.toLowerCase().includes('pressure') ? 'NEGATIVE' : 'NEUTRAL',
-    reasoning: `Initial event observation discovered via ${evidence.publisher}.`,
-    priority: evidence.authorityScore > 80 ? 'HIGH' : 'MEDIUM',
-    factors: {
-      changeMagnitude: 70,
-      financialImpact: 65,
-      portfolioExposure: 80,
-      liquidityImpact: 60,
-      valuationImpact: 60,
-      strategicImportance: 75,
-      systemicRelevance: 50,
-      novelty: 90,
-      sourceConfidence: evidence.authorityScore,
-    },
-  };
+  const facts: EpistemicClaim[] = analysis.factsEstablished.map((statement, i) => ({
+    id: `claim_${eventId}_${i}`,
+    entityId: canonicalEntity.id,
+    type: analysis.sources.some((s) => s.tier === 'TIER_1_PRIMARY') ? 'OBSERVED_FACT' : 'SUPPORTED_INFERENCE',
+    statement,
+    supportingEvidenceIds: [],
+    confidence: analysis.confidenceScore,
+    provenance: analysis.sources.map((s) => s.publisher).join(', ') || 'Analysed evidence',
+  }));
 
   const newEvent: CanonicalIntelligenceEvent = {
     eventId,
     canonicalEntityId: canonicalEntity.id,
     portfolioIds: [portfolioId],
     eventType: clusterKey.split('__')[1]?.toUpperCase() || 'GENERAL_UPDATE',
-    title: `${canonicalEntity.canonicalName}: ${evidence.sourceName}`,
-    summary: evidence.snippet,
-    lifecycleState: 'DETECTED',
-    firstSeenAt: evidence.publishedAt,
-    lastEvidenceAt: evidence.publishedAt,
-    eventDate: evidence.publishedAt,
-    facts: [initialFact],
-    metrics: extractedMetrics,
-    evidenceIds: [evidence.id],
-    materiality: defaultMateriality,
-    confidenceScore: evidence.authorityScore,
-    implications: [`Assessing potential portfolio implications on ${canonicalEntity.canonicalName}.`],
-    openQuestions: [`What are the full operational and financial implications of this development?`],
+    title: analysis.headline,
+    summary: analysis.whatChanged,
+    sources: analysis.sources,
+    nextTrigger: analysis.nextTrigger,
+    lifecycleState: 'VALIDATED',
+    firstSeenAt: latestPublishedAt,
+    lastEvidenceAt: latestPublishedAt,
+    eventDate: latestPublishedAt,
+    facts,
+    metrics: analysis.metrics,
+    evidenceIds: [],
+    materiality: materialityFromAnalysis(analysis),
+    confidenceScore: analysis.confidenceScore,
+    implications: [analysis.whyItMatters],
+    openQuestions: analysis.openQuestions,
     relatedEventIds: [],
+    changeInView:
+      analysis.priorAssessment && analysis.newAssessment
+        ? {
+            priorAssessment: analysis.priorAssessment,
+            newAssessment: analysis.newAssessment,
+            magnitude: analysis.materialityScore >= 75 ? 'HIGH' : analysis.materialityScore >= 45 ? 'MEDIUM' : 'LOW',
+            triggerEventIds: [eventId],
+            rationale: analysis.reasoning,
+          }
+        : undefined,
   };
 
   L1_EVENT_STORE.set(clusterKey, newEvent);
-  return { event: newEvent, isNewEvent: true, isNewSource: true };
+  return { event: newEvent, isNewEvent: true };
 }
 
 /**

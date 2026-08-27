@@ -3234,6 +3234,57 @@ input[type="text"],
   flex-wrap: wrap;
 }
 
+/* Clickable source attribution inside the analyst detail view */
+.detail-source-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.82rem;
+  transition: color 0.12s ease;
+}
+
+.detail-source-link:last-child {
+  border-bottom: none;
+}
+
+.detail-source-link:hover {
+  color: var(--accent-cyan);
+}
+
+.detail-source-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.detail-source-publisher {
+  font-weight: 700;
+  color: inherit;
+}
+
+.detail-source-tier {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.detail-source-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 /* ==========================================================================
    PORTFOLIO DEEP DIVE — per-holding cards & dashboard table
    ========================================================================== */

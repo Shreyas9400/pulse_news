@@ -299,6 +299,14 @@ export interface MetricDelta {
   asOfDate?: string;
 }
 
+export interface EventSourceRef {
+  url: string;
+  publisher: string;
+  title: string;
+  publishedAt: string;
+  tier: string;
+}
+
 export interface CanonicalIntelligenceEvent {
   eventId: string;
   canonicalEntityId: string;
@@ -306,6 +314,10 @@ export interface CanonicalIntelligenceEvent {
   eventType: string; // e.g. "REDEMPTION_CHANGE", "EARNINGS_CAPEX_SURGE", "NON_ACCRUAL_INCREASE"
   title: string;
   summary: string;
+  /** Resolved, clickable source attribution for every claim in this event. */
+  sources: EventSourceRef[];
+  /** The next observable fact that would confirm or invalidate the current assessment. */
+  nextTrigger?: string;
   lifecycleState: EventLifecycleState;
   firstSeenAt: string;
   lastEvidenceAt: string;
