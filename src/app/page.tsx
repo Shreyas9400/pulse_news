@@ -14,9 +14,12 @@ import NotificationModal from '@/components/NotificationModal';
 import SettingsModal, { AppSettings, DEFAULT_SETTINGS } from '@/components/SettingsModal';
 import EntityDossierModal from '@/components/EntityDossierModal';
 import MobileBottomNav from '@/components/MobileBottomNav';
-import { NewsArticle, StockQuote, DailyBriefing, CategoryId } from '@/lib/types';
+import ResearchTraceModal from '@/components/ResearchTraceModal';
+import PortfolioIntelligenceModal from '@/components/PortfolioIntelligenceModal';
+import EventTimelineCard from '@/components/EventTimelineCard';
+import { NewsArticle, StockQuote, DailyBriefing, CategoryId, ResearchTrace, PortfolioIntelligenceProfile, CanonicalIntelligenceEvent } from '@/lib/types';
 import { getTickerMeta, isSectorEntity, TickerMetadata } from '@/lib/stock-aliases';
-import { RefreshCw, VolumeX } from 'lucide-react';
+import { RefreshCw, VolumeX, Sparkles, Database, Layers } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
 import { syncPortfolioToFirebase, loadPortfolioFromFirebase } from '@/lib/firestore-sync';
 
@@ -61,6 +64,14 @@ export default function HomePage() {
 
   // Entity Dossier AI Dashboard state
   const [dossierSymbol, setDossierSymbol] = useState<string | null>(null);
+
+  // Research Control Plane & Intelligence states
+  const [isResearchTraceModalOpen, setIsResearchTraceModalOpen] = useState(false);
+  const [isPortfolioProfileModalOpen, setIsPortfolioProfileModalOpen] = useState(false);
+  const [researchTrace, setResearchTrace] = useState<ResearchTrace | null>(null);
+  const [portfolioProfile, setPortfolioProfile] = useState<PortfolioIntelligenceProfile | null>(null);
+  const [canonicalEvents, setCanonicalEvents] = useState<CanonicalIntelligenceEvent[]>([]);
+  const [isDeepResearching, setIsDeepResearching] = useState(false);
 
   // Audio Speech state
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -193,11 +204,70 @@ export default function HomePage() {
     }
   }, []);
 
+  // Fetch Dynamic Portfolio Profile
+  const fetchPortfolioProfile = useCallback(async (customPortfolio?: string[]) => {
+    try {
+      const activeList = customPortfolio || portfolio;
+      const res = await fetch('/api/research/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolioId: 'user_portfolio', entities: activeList }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.profile) setPortfolioProfile(data.profile);
+      }
+    } catch {}
+  }, [portfolio]);
+
+  // Trigger Deep Stateful Research Cycle across the Blackboard
+  const triggerDeepResearchRun = useCallback(async (customPortfolio?: string[]) => {
+    setIsDeepResearching(true);
+    try {
+      const activeList = customPortfolio || portfolio;
+      const res = await fetch('/api/research/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolioId: 'user_portfolio', entities: activeList }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.result) {
+          setResearchTrace(data.result.trace);
+          setCanonicalEvents(data.result.events || []);
+
+          // Synthesize delta briefing into state
+          if (data.result.deltaStories) {
+            setBriefing({
+              date: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }),
+              greeting: `STATEFUL DELTA RESEARCH BRIEFING • ${(portfolioProfile?.primaryDomain || 'PORTFOLIO').toUpperCase()}`,
+              overview: `Stateful Research Cycle: ${data.result.deltaStories.length} material incremental developments identified. ${data.result.synthesisSummary}`,
+              marketMood: data.result.synthesisSummary,
+              topStories: [],
+              keyBulletPoints: data.result.deltaStories.map((d: any) => `${d.entityName}: ${d.whatChanged} — ${d.portfolioImpact}`),
+              generatedAt: new Date().toISOString(),
+              deltaStories: data.result.deltaStories,
+              quietEntities: data.result.quietEntities,
+              portfolioDomain: portfolioProfile?.primaryDomain,
+              stateTransitionsCount: data.result.deltaStories.length,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Deep research run failed:', e);
+    } finally {
+      setIsDeepResearching(false);
+    }
+  }, [portfolio, portfolioProfile]);
+
   // Initial load + Dynamic auto-refresh intervals based on Settings (Default 60 min)
   useEffect(() => {
     fetchLiveQuotes();
     fetchNews('portfolio', '', null);
     fetchBriefing();
+    fetchPortfolioProfile();
 
     // Auto-refresh live stock quotes (default 45s)
     const quoteIntervalMs = (settings.quotesRefreshIntervalSeconds || 45) * 1000;
@@ -218,7 +288,7 @@ export default function HomePage() {
       clearInterval(quoteInterval);
       if (newsInterval) clearInterval(newsInterval);
     };
-  }, [fetchLiveQuotes, fetchNews, fetchBriefing, searchQuery, selectedStockFilter, settings]);
+  }, [fetchLiveQuotes, fetchNews, fetchBriefing, fetchPortfolioProfile, searchQuery, selectedStockFilter, settings]);
 
   // Handle Category selection
   const handleSelectCategory = (cat: CategoryId) => {
@@ -556,17 +626,52 @@ export default function HomePage() {
             onRemoveSymbol={handleRemoveSymbol}
             entitySummaries={entitySummaries}
             onOpenDossier={(sym) => setDossierSymbol(sym)}
+            onOpenPortfolioProfile={() => setIsPortfolioProfileModalOpen(true)}
+            onTriggerResearchRun={() => triggerDeepResearchRun()}
+            isResearching={isDeepResearching}
           />
         )}
 
-        {/* AI Morning Briefing Section */}
+        {/* AI Delta Briefing Section */}
         {activeCategory === 'all' && !searchQuery && (
           <BriefingHero
             briefing={briefing}
             onPlayBriefingAudio={handlePlayAudio}
             isSpeaking={isSpeaking}
             onSelectArticle={setReaderArticle}
+            onOpenResearchTrace={() => setIsResearchTraceModalOpen(true)}
+            onOpenPortfolioProfile={() => setIsPortfolioProfileModalOpen(true)}
           />
+        )}
+
+        {/* Canonical Intelligence Events Timeline */}
+        {canonicalEvents.length > 0 && !searchQuery && (
+          <div style={{ margin: '20px 0 10px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Layers size={16} className="text-cyan-400" />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em' }}>
+                  ACTIVE CANONICAL INTELLIGENCE EVENTS ({canonicalEvents.length})
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsResearchTraceModalOpen(true)}
+                style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer' }}
+              >
+                View Blackboard Trace →
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+              {canonicalEvents.map((evt) => (
+                <EventTimelineCard
+                  key={evt.eventId}
+                  event={evt}
+                  onOpenTrace={() => setIsResearchTraceModalOpen(true)}
+                />
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Section Headline Banner */}
@@ -767,6 +872,20 @@ export default function HomePage() {
         onClose={() => setIsSettingsModalOpen(false)}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
+      />
+
+      {/* Portfolio Intelligence Profile Modal */}
+      <PortfolioIntelligenceModal
+        isOpen={isPortfolioProfileModalOpen}
+        onClose={() => setIsPortfolioProfileModalOpen(false)}
+        profile={portfolioProfile}
+      />
+
+      {/* Research Trace & Blackboard Inspector Modal */}
+      <ResearchTraceModal
+        isOpen={isResearchTraceModalOpen}
+        onClose={() => setIsResearchTraceModalOpen(false)}
+        trace={researchTrace}
       />
 
       {/* AI-Generated Entity & Sector Intelligence Dossier Dashboard */}

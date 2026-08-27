@@ -23,6 +23,9 @@ interface PortfolioOverviewProps {
   onRemoveSymbol: (symbol: string) => void;
   entitySummaries?: PortfolioEntitySummary[];
   onOpenDossier?: (symbol: string) => void;
+  onOpenPortfolioProfile?: () => void;
+  onTriggerResearchRun?: () => void;
+  isResearching?: boolean;
 }
 
 export default function PortfolioOverview({
@@ -36,6 +39,9 @@ export default function PortfolioOverview({
   onRemoveSymbol,
   entitySummaries = [],
   onOpenDossier,
+  onOpenPortfolioProfile,
+  onTriggerResearchRun,
+  isResearching = false,
 }: PortfolioOverviewProps) {
   // Separate stocks from pure sectors strictly based on user's portfolioSymbols
   const stockSymbols = portfolioSymbols.filter((s) => !isSectorEntity(s));
@@ -102,6 +108,31 @@ export default function PortfolioOverview({
         </div>
 
         <div className="portfolio-actions-row">
+          {onOpenPortfolioProfile && (
+            <button
+              onClick={onOpenPortfolioProfile}
+              className="btn-portfolio-action"
+              style={{ color: '#c084fc', borderColor: 'rgba(168, 85, 247, 0.4)', background: 'rgba(168, 85, 247, 0.1)' }}
+              title="View Domain Intelligence Profile"
+            >
+              <Sparkles size={13} />
+              <span>PROFILE</span>
+            </button>
+          )}
+
+          {onTriggerResearchRun && (
+            <button
+              onClick={onTriggerResearchRun}
+              disabled={isResearching}
+              className="btn-portfolio-action"
+              style={{ color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(56, 189, 248, 0.1)' }}
+              title="Run Deep Recursive Research Cycle"
+            >
+              <Layers size={13} style={{ animation: isResearching ? 'spin 1s linear infinite' : 'none' }} />
+              <span>{isResearching ? 'RESEARCHING...' : 'DEEP RESEARCH'}</span>
+            </button>
+          )}
+
           <button
             onClick={onRefreshQuotes}
             disabled={isLoadingQuotes}
