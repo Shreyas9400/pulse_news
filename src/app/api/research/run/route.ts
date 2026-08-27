@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { portfolioId = 'default_portfolio', entities = [] } = body;
+    const { portfolioId = 'default_portfolio', entities = [], customQuestions = [] } = body;
 
     if (!Array.isArray(entities) || entities.length === 0) {
       return NextResponse.json(
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await ResearchJobs.triggerPortfolioResearch(portfolioId, entities);
+    const result = await ResearchJobs.triggerPortfolioResearch(portfolioId, entities, customQuestions);
 
     return NextResponse.json({
       success: true,

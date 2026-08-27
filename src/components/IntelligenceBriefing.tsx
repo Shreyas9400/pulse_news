@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { RefreshCw, ArrowRight } from 'lucide-react';
+import { RefreshCw, ArrowRight, FileText } from 'lucide-react';
 import {
   DailyBriefing,
   CanonicalIntelligenceEvent,
@@ -24,6 +24,8 @@ import {
   humanizeEntityId,
 } from '@/lib/risk-presentation';
 
+export type ChangeMetric = { label: string; from?: string; to: string };
+
 export type ChangeItem = {
   id: string;
   entityLabel: string;
@@ -36,6 +38,7 @@ export type ChangeItem = {
   materialityText: string;
   riskState: RiskState;
   nextTrigger?: string;
+  metrics: ChangeMetric[];
   kind: 'event' | 'delta';
   raw: CanonicalIntelligenceEvent | DeltaStoryItem;
 };
@@ -52,6 +55,7 @@ interface IntelligenceBriefingProps {
   onOpenResearchTrace: () => void;
   onOpenPortfolioProfile: () => void;
   onOpenManagePortfolio: () => void;
+  onOpenDeepDive: () => void;
 }
 
 function eventToChangeItem(event: CanonicalIntelligenceEvent): ChangeItem {
@@ -74,6 +78,11 @@ function eventToChangeItem(event: CanonicalIntelligenceEvent): ChangeItem {
     materialityText: materialityPriorityLabel(event.materiality.priority),
     riskState,
     nextTrigger,
+    metrics: event.metrics.map((m) => ({
+      label: m.metricName,
+      from: m.previousValue !== undefined ? String(m.previousValue) : undefined,
+      to: String(m.currentValue),
+    })),
     kind: 'event',
     raw: event,
   };
@@ -92,6 +101,7 @@ function deltaToChangeItem(story: DeltaStoryItem): ChangeItem {
     materialityText: materialityScoreLabel(story.materialityScore),
     riskState,
     nextTrigger: story.whatWouldChangeOurView ? humanizeEntityTokens(story.whatWouldChangeOurView) : undefined,
+    metrics: [],
     kind: 'delta',
     raw: story,
   };
@@ -134,6 +144,7 @@ export default function IntelligenceBriefing({
   onOpenResearchTrace,
   onOpenPortfolioProfile,
   onOpenManagePortfolio,
+  onOpenDeepDive,
 }: IntelligenceBriefingProps) {
   const quietEntities: QuietEntityReport[] = briefing?.quietEntities || [];
   const crossSynthesis = briefing?.crossEntitySynthesis || null;
@@ -252,6 +263,18 @@ export default function IntelligenceBriefing({
                 <div className="ib-change-headline">{item.headline}</div>
                 <p className="ib-change-desc">{item.whatChanged}</p>
 
+                {item.metrics.length > 0 && (
+                  <div className="dd-metrics-row" style={{ marginBottom: 6 }}>
+                    {item.metrics.map((m, mi) => (
+                      <span key={mi} className="dd-metric-chip">
+                        <span className="dd-metric-label">{m.label}:</span>{' '}
+                        {m.from && <span className="dd-metric-from">{m.from} → </span>}
+                        <strong>{m.to}</strong>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {item.changeFrom && item.changeTo && (
                   <div className={`ib-change-view-row tone-${item.riskState.tone}`}>
                     <span className="ib-change-view-label">View:</span>
@@ -279,11 +302,16 @@ export default function IntelligenceBriefing({
       {pulseEntries.length > 0 && (
         <>
           <hr className="ib-rule" />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <div className="ib-section-title">Portfolio Pulse</div>
-            <button className="ib-link-btn" onClick={onOpenManagePortfolio} style={{ marginBottom: 12 }}>
-              Manage
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+              <button className="ib-link-btn" onClick={onOpenDeepDive}>
+                <FileText size={13} /> Full Portfolio Analysis
+              </button>
+              <button className="ib-link-btn" onClick={onOpenManagePortfolio}>
+                Manage
+              </button>
+            </div>
           </div>
           <div className="ib-pulse-strip">
             {pulseEntries.map(({ symbol, state }) => (

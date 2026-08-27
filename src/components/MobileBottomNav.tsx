@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { CategoryId } from '@/lib/types';
-import { Wallet, Newspaper, Zap, Bookmark, Bell } from 'lucide-react';
+import { Wallet, Newspaper, LayoutGrid, Bookmark, Bell } from 'lucide-react';
 
 interface MobileBottomNavProps {
   activeCategory: CategoryId;
@@ -19,10 +19,10 @@ export default function MobileBottomNav({
 }: MobileBottomNavProps) {
   return (
     <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
-      {/* 1. Portfolio */}
+      {/* 1. Portfolio Analytics Brief (front page) */}
       <button
-        onClick={() => onSelectCategory('portfolio')}
-        className={`mobile-nav-item ${activeCategory === 'portfolio' ? 'active' : ''}`}
+        onClick={() => onSelectCategory('brief')}
+        className={`mobile-nav-item ${activeCategory === 'brief' ? 'active' : ''}`}
       >
         <Wallet size={20} />
         <span>Portfolio</span>
@@ -33,17 +33,17 @@ export default function MobileBottomNav({
         onClick={() => onSelectCategory('all')}
         className={`mobile-nav-item ${activeCategory === 'all' ? 'active' : ''}`}
       >
-        <Newspaper size={20} />
+        <LayoutGrid size={20} />
         <span>Headlines</span>
       </button>
 
-      {/* 3. Industry Sectors */}
+      {/* 3. Portfolio News Wire */}
       <button
-        onClick={() => onSelectCategory('industry-chips')}
-        className={`mobile-nav-item ${activeCategory.startsWith('industry-') ? 'active' : ''}`}
+        onClick={() => onSelectCategory('portfolio')}
+        className={`mobile-nav-item ${activeCategory === 'portfolio' ? 'active' : ''}`}
       >
-        <Zap size={20} />
-        <span>Sectors</span>
+        <Newspaper size={20} />
+        <span>Pf. News</span>
       </button>
 
       {/* 4. Saved Bookmarks */}

@@ -95,19 +95,10 @@ export interface QuietEntityReport {
 }
 
 export type CategoryId =
+  | 'brief'
   | 'portfolio'
   | 'all'
-  | 'industry-chips'
-  | 'industry-ai-cloud'
-  | 'industry-ev'
-  | 'industry-fintech'
-  | 'industry-biotech'
-  | 'industry-cyber'
   | 'markets'
-  | 'tech'
-  | 'world'
-  | 'business'
-  | 'science'
   | 'saved';
 
 export interface CategoryTab {

@@ -364,6 +364,10 @@ export function isSectorEntity(id: string): boolean {
 
   // 3. Known keywords heuristics if not in ticker directory
   if (!TICKER_DIRECTORY[clean]) {
+    // Underscore-separated or multi-word labels (e.g. HIGH_YIELD_BONDS) are never
+    // real ticker symbols — treat any such unresolved portfolio entry as a sector.
+    if (clean.includes('_') || clean.length > 6) return true;
+
     const sectorKeywords = ['SECTOR', 'INDUSTRY', 'CHIPS', 'CLOUD', 'ENERGY', 'BANKING', 'PHARMA', 'DEFENSE', 'MACRO', 'INCOME', 'CREDIT'];
     return sectorKeywords.some((k) => clean.includes(k));
   }

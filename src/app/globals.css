@@ -3234,4 +3234,151 @@ input[type="text"],
   flex-wrap: wrap;
 }
 
+/* ==========================================================================
+   PORTFOLIO DEEP DIVE — per-holding cards & dashboard table
+   ========================================================================== */
+.dd-wide {
+  max-width: 820px;
+}
+
+.dd-section-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.dd-bottomline-box {
+  padding-bottom: 4px;
+}
+
+.dd-entity-card {
+  border-style: solid;
+  border-width: 1px 1px 1px 3px;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.dd-entity-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.dd-entity-symbol {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.dd-entity-name {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.dd-status-pill {
+  margin-left: auto;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.dd-metrics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.dd-metric-chip {
+  font-size: 0.76rem;
+  font-family: var(--font-mono);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  color: var(--text-secondary);
+}
+
+.dd-metric-label {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+}
+
+.dd-metric-from {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.dd-facts-list {
+  margin-bottom: 8px;
+}
+
+.dd-card-text {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.dd-card-text:last-child {
+  margin-bottom: 0;
+}
+
+.dd-card-text strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.dd-dashboard-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.dd-dashboard-row {
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) minmax(90px, max-content) 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+}
+
+.dd-dashboard-row:last-child {
+  border-bottom: none;
+}
+
+.dd-dashboard-holding {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dd-dashboard-row .dd-status-pill {
+  margin-left: 0;
+  justify-self: start;
+}
+
+.dd-dashboard-watching {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .dd-dashboard-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 

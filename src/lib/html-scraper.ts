@@ -35,6 +35,37 @@ function getRandomUserAgent(): string {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
+/**
+ * Best-effort extraction of a real publish timestamp from scraped search-result text
+ * (e.g. "3 hours ago", "2 days ago", or an absolute date string). Returns null when
+ * no genuine date signal is present, so callers can fall back to a synthetic value.
+ */
+function parseScrapedDateText(text: string): number | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+
+  const relativeMatch = trimmed.match(/(\d+)\s*(minute|hour|day|week|month)s?\s*ago/i);
+  if (relativeMatch) {
+    const amount = parseInt(relativeMatch[1], 10);
+    const unit = relativeMatch[2].toLowerCase();
+    const unitMs: Record<string, number> = {
+      minute: 60_000,
+      hour: 3_600_000,
+      day: 86_400_000,
+      week: 7 * 86_400_000,
+      month: 30 * 86_400_000,
+    };
+    return Date.now() - amount * unitMs[unit];
+  }
+
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed) && parsed > 0 && parsed <= Date.now() + 86_400_000) {
+    return parsed;
+  }
+
+  return null;
+}
+
 // In-Memory L1 Cache (20 min TTL)
 const l1Cache = new Map<string, { data: ScrapedSearchResult[]; expiresAt: number }>();
 
@@ -117,15 +148,19 @@ export async function scrapeDuckDuckGoNews(query: string, maxResults = 8): Promi
 
       const snippet = $(elem).find('.result__snippet, .result__snippet__body').text().trim();
       const source = $(elem).find('.result__url').text().trim().replace(/https?:\/\//, '').split('/')[0] || 'DuckDuckGo Wire';
+      const dateHint = $(elem).find('.result__timestamp').text().trim() || snippet.split(' - ')[0];
+      const realDate = parseScrapedDateText(dateHint);
 
       if (title && rawHref && title.length > 8 && !rawHref.includes('duckduckgo.com')) {
+        const timestamp = realDate ?? Date.now() - results.length * 120000;
         results.push({
           title,
           url: rawHref,
           snippet: snippet || 'Market intelligence reported via DuckDuckGo web search.',
           source: source.toUpperCase(),
           sourceIcon: '🦆',
-          timestamp: Date.now() - results.length * 120000,
+          publishedDate: realDate ? new Date(realDate).toISOString() : undefined,
+          timestamp,
           engine: 'duckduckgo',
         });
       }
@@ -166,15 +201,19 @@ export async function scrapeBingNews(query: string, maxResults = 8): Promise<Scr
       const url = titleElem.attr('href') || '';
       const snippet = $(elem).find('.snippet, .na_snippet, .desc, .snippet_t').text().trim();
       const source = $(elem).find('.source, .na_source, .prov').text().trim() || 'Bing News Wire';
+      const dateHint = $(elem).find('time, .na_t time, [aria-label*="ago" i], .source span').last().text().trim();
+      const realDate = parseScrapedDateText(dateHint);
 
       if (title && url && url.startsWith('http') && title.length > 8) {
+        const timestamp = realDate ?? Date.now() - results.length * 180000;
         results.push({
           title,
           url,
           snippet: snippet || 'Market intelligence reported via Bing News search.',
           source: source.toUpperCase(),
           sourceIcon: '🅱️',
-          timestamp: Date.now() - results.length * 180000,
+          publishedDate: realDate ? new Date(realDate).toISOString() : undefined,
+          timestamp,
           engine: 'bing',
         });
       }
@@ -213,6 +252,9 @@ export async function scrapeGoogleRealtimeNews(query: string, maxResults = 8): P
       const rawDesc = $(elem).find('description').text().trim();
       const source = $(elem).find('source').text().trim() || 'Google News Wire';
       const cleanSnippet = rawDesc.replace(/<[^>]*>?/gm, '').trim();
+      const pubDateText = $(elem).find('pubDate').text().trim();
+      const parsedPubDate = pubDateText ? Date.parse(pubDateText) : NaN;
+      const hasRealDate = !isNaN(parsedPubDate);
 
       if (title && link && title.length > 8) {
         results.push({
@@ -221,7 +263,8 @@ export async function scrapeGoogleRealtimeNews(query: string, maxResults = 8): P
           snippet: cleanSnippet || title,
           source: source.toUpperCase(),
           sourceIcon: '🌐',
-          timestamp: Date.now() - results.length * 60000,
+          publishedDate: hasRealDate ? new Date(parsedPubDate).toISOString() : undefined,
+          timestamp: hasRealDate ? parsedPubDate : Date.now() - results.length * 60000,
           engine: 'google',
         });
       }
@@ -251,7 +294,7 @@ export async function scrapeMultiEngineNews(query: string, maxResults = 12): Pro
       description: r.snippet,
       source: r.source,
       sourceIcon: r.sourceIcon || '🌐',
-      publishedAt: new Date(r.timestamp).toISOString(),
+      publishedAt: r.publishedDate || new Date(r.timestamp).toISOString(),
       timestamp: r.timestamp,
       category: 'portfolio',
       sentiment: deriveSentiment(r.title, r.snippet),

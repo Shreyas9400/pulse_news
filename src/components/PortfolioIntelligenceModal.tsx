@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { X, Sparkles, Activity, Layers, Compass, HelpCircle, FileText, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Sparkles, Activity, Layers, Compass, HelpCircle, FileText, ArrowRight, Plus, User } from 'lucide-react';
 import { PortfolioIntelligenceProfile } from '@/lib/types';
 import { humanizeEntityTokens } from '@/lib/risk-presentation';
 
@@ -9,10 +9,30 @@ interface PortfolioIntelligenceModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: PortfolioIntelligenceProfile | null;
+  customQuestions?: string[];
+  onAddCustomQuestion?: (question: string) => void;
+  onRemoveCustomQuestion?: (question: string) => void;
 }
 
-export default function PortfolioIntelligenceModal({ isOpen, onClose, profile }: PortfolioIntelligenceModalProps) {
+export default function PortfolioIntelligenceModal({
+  isOpen,
+  onClose,
+  profile,
+  customQuestions = [],
+  onAddCustomQuestion,
+  onRemoveCustomQuestion,
+}: PortfolioIntelligenceModalProps) {
+  const [draftQuestion, setDraftQuestion] = useState('');
+
   if (!isOpen || !profile) return null;
+
+  const handleAddQuestion = () => {
+    const trimmed = draftQuestion.trim();
+    if (trimmed && onAddCustomQuestion) {
+      onAddCustomQuestion(trimmed);
+      setDraftQuestion('');
+    }
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -100,6 +120,53 @@ export default function PortfolioIntelligenceModal({ isOpen, onClose, profile }:
               <span>{humanizeEntityTokens(q)}</span>
             </div>
           ))}
+
+          {customQuestions.length > 0 && (
+            <div style={{ marginTop: profile.level3ActiveContext.activeResearchQuestions.length > 0 ? 10 : 0 }}>
+              {customQuestions.map((q, i) => (
+                <div key={i} className="detail-question-item" style={{ alignItems: 'center' }}>
+                  <User size={13} className="tone-cyan" style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{q}</span>
+                  {onRemoveCustomQuestion && (
+                    <button
+                      onClick={() => onRemoveCustomQuestion(q)}
+                      className="chip-remove-btn"
+                      title="Remove question"
+                      aria-label="Remove question"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {onAddCustomQuestion && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <input
+                type="text"
+                value={draftQuestion}
+                onChange={(e) => setDraftQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddQuestion();
+                  }
+                }}
+                placeholder="Ask your own research question..."
+                className="search-input"
+                style={{ height: 34, fontSize: '0.82rem', textTransform: 'none' }}
+              />
+              <button onClick={handleAddQuestion} className="btn-portfolio-action" style={{ flexShrink: 0 }}>
+                <Plus size={13} />
+                <span>Add</span>
+              </button>
+            </div>
+          )}
+          <p className="form-field-hint" style={{ marginTop: 6 }}>
+            Questions you add here are included as research priorities the next time analysis runs.
+          </p>
         </div>
 
         <div className="detail-section">

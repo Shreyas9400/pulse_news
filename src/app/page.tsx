@@ -16,8 +16,11 @@ import EntityDossierModal from '@/components/EntityDossierModal';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import ResearchTraceModal from '@/components/ResearchTraceModal';
 import PortfolioIntelligenceModal from '@/components/PortfolioIntelligenceModal';
+import PortfolioDeepDiveModal from '@/components/PortfolioDeepDiveModal';
 import { NewsArticle, StockQuote, DailyBriefing, CategoryId, ResearchTrace, PortfolioIntelligenceProfile, CanonicalIntelligenceEvent } from '@/lib/types';
+import type { PortfolioDeepDiveReport } from '@/lib/gemini';
 import { getTickerMeta, isSectorEntity, TickerMetadata } from '@/lib/stock-aliases';
+import { humanizeEntityTokens, humanizeEntityId, riskStateFromMateriality, confidenceLabel } from '@/lib/risk-presentation';
 import { RefreshCw, VolumeX } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
 import { syncPortfolioToFirebase, loadPortfolioFromFirebase } from '@/lib/firestore-sync';
@@ -33,7 +36,7 @@ export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [stockQuotes, setStockQuotes] = useState<StockQuote[]>([]);
   const [briefing, setBriefing] = useState<DailyBriefing | null>(null);
-  const [activeCategory, setActiveCategory] = useState<CategoryId>('portfolio');
+  const [activeCategory, setActiveCategory] = useState<CategoryId>('brief');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStockFilter, setSelectedStockFilter] = useState<string | null>(null);
   const [isRefreshingNews, setIsRefreshingNews] = useState(false);
@@ -74,6 +77,14 @@ export default function HomePage() {
   const [selectedChangeItem, setSelectedChangeItem] = useState<ChangeItem | null>(null);
   const lastResearchedPortfolioKeyRef = useRef<string>('');
 
+  // User-submitted research questions, fed into the next research cycle
+  const [customQuestions, setCustomQuestions] = useState<string[]>([]);
+
+  // Holistic Portfolio Deep Dive report state
+  const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
+  const [deepDiveReport, setDeepDiveReport] = useState<PortfolioDeepDiveReport | null>(null);
+  const [isLoadingDeepDive, setIsLoadingDeepDive] = useState(false);
+
   // Audio Speech state
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -97,6 +108,12 @@ export default function HomePage() {
       if (storedPortfolio) {
         const parsed = JSON.parse(storedPortfolio);
         if (Array.isArray(parsed) && parsed.length > 0) setPortfolio(parsed);
+      }
+
+      const storedQuestions = localStorage.getItem('pulse_custom_research_questions');
+      if (storedQuestions) {
+        const parsedQuestions = JSON.parse(storedQuestions);
+        if (Array.isArray(parsedQuestions)) setCustomQuestions(parsedQuestions);
       }
 
       // Load cloud portfolio from Firebase Firestore database 'pulsenews'
@@ -197,7 +214,10 @@ export default function HomePage() {
       if (res.ok) {
         const data = await res.json();
         if (data.briefing) {
-          setBriefing(data.briefing);
+          // Never clobber the richer stateful research briefing (deltaStories/crossEntitySynthesis)
+          // with this generic fallback — the deep research cycle supersedes it once it lands,
+          // regardless of which fetch happens to resolve last.
+          setBriefing((prev) => (prev?.deltaStories ? prev : data.briefing));
         }
       }
     } catch {
@@ -229,7 +249,7 @@ export default function HomePage() {
       const res = await fetch('/api/research/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portfolioId: 'user_portfolio', entities: activeList }),
+        body: JSON.stringify({ portfolioId: 'user_portfolio', entities: activeList, customQuestions }),
       });
 
       if (res.ok) {
@@ -262,7 +282,7 @@ export default function HomePage() {
     } finally {
       setIsDeepResearching(false);
     }
-  }, [portfolio, portfolioProfile]);
+  }, [portfolio, portfolioProfile, customQuestions]);
 
   // Auto-run the senior analyst research cycle whenever the mounted portfolio
   // composition actually changes (covers initial default portfolio, then the
@@ -312,7 +332,7 @@ export default function HomePage() {
     setSelectedStockFilter(null);
     setNewsEntityFilter('ALL');
     setNewsSentimentFilter('ALL');
-    if (cat !== 'saved') {
+    if (cat !== 'saved' && cat !== 'brief') {
       fetchNews(cat, '', null);
     }
   };
@@ -328,6 +348,13 @@ export default function HomePage() {
       setNewsEntityFilter(symbol);
       fetchNews('markets', '', symbol);
     }
+  };
+
+  // Dynamic sector pill click (portfolio-derived sectors shown in the top nav)
+  const handleSelectSectorPill = (symbol: string) => {
+    setSearchQuery('');
+    setActiveCategory('portfolio');
+    handleSelectStockFilter(symbol);
   };
 
   // Handle Search Submission
@@ -390,6 +417,85 @@ export default function HomePage() {
     fetchNews('portfolio', '', null, updated);
   };
 
+  // Custom Research Questions — persisted locally, fed into the next research cycle
+  const handleAddCustomQuestion = (question: string) => {
+    const updated = [...new Set([...customQuestions, question])];
+    setCustomQuestions(updated);
+    try {
+      localStorage.setItem('pulse_custom_research_questions', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleRemoveCustomQuestion = (question: string) => {
+    const updated = customQuestions.filter((q) => q !== question);
+    setCustomQuestions(updated);
+    try {
+      localStorage.setItem('pulse_custom_research_questions', JSON.stringify(updated));
+    } catch {}
+  };
+
+  // Holistic Portfolio Deep Dive — a brief long-form read synthesized from the
+  // current research cycle's findings (no new scraping)
+  const fetchDeepDiveReport = useCallback(async () => {
+    setIsLoadingDeepDive(true);
+    try {
+      const materialChanges = (canonicalEvents.length > 0 ? canonicalEvents : []).map((e) => {
+        const riskState = riskStateFromMateriality(e.materiality);
+        const symbol = e.canonicalEntityId.replace(/^(?:ENT_)+/, '');
+        return {
+          symbol,
+          entity: getTickerMeta(symbol)?.name || humanizeEntityId(e.canonicalEntityId),
+          headline: humanizeEntityTokens(e.title),
+          whatChanged: humanizeEntityTokens(e.summary),
+          whyItMatters: humanizeEntityTokens(e.implications?.[0] || e.materiality.reasoning),
+          riskState: riskState.label,
+          tone: riskState.tone,
+          confidence: confidenceLabel(e.confidenceScore),
+          facts: e.facts.map((f) => humanizeEntityTokens(f.statement)),
+          metrics: e.metrics.map((m) => ({
+            label: m.metricName,
+            from: m.previousValue !== undefined ? String(m.previousValue) : undefined,
+            to: String(m.currentValue),
+          })),
+        };
+      });
+      const quietList = (briefing?.quietEntities || []).map((q) => ({
+        entity: humanizeEntityTokens(q.entityName),
+        status: q.lastKnownState,
+      }));
+
+      const res = await fetch('/api/research/deep-dive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: portfolioProfile?.primaryDomain || 'portfolio',
+          entities: portfolio.map((sym) => ({ symbol: sym, name: getTickerMeta(sym)?.name || sym })),
+          materialChanges,
+          quietEntities: quietList,
+          crossSynthesisSummary: briefing?.crossEntitySynthesis?.summary
+            ? humanizeEntityTokens(briefing.crossEntitySynthesis.summary)
+            : undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.report) setDeepDiveReport(data.report);
+      }
+    } catch (e) {
+      console.warn('Portfolio deep dive failed:', e);
+    } finally {
+      setIsLoadingDeepDive(false);
+    }
+  }, [canonicalEvents, briefing, portfolioProfile, portfolio]);
+
+  const handleOpenDeepDive = useCallback(() => {
+    setIsDeepDiveOpen(true);
+    if (!deepDiveReport && !isLoadingDeepDive) {
+      fetchDeepDiveReport();
+    }
+  }, [deepDiveReport, isLoadingDeepDive, fetchDeepDiveReport]);
+
   // Audio Speech Synthesis Handler
   const handlePlayAudio = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
@@ -422,6 +528,8 @@ export default function HomePage() {
     }
   };
 
+  const sectorSymbols = useMemo(() => portfolio.filter((s) => isSectorEntity(s)), [portfolio]);
+  const showWire = activeCategory !== 'brief' || !!searchQuery;
   const rawDisplayedArticles = activeCategory === 'saved' ? savedArticles : articles;
 
   // Filtered & Sorted Articles
@@ -489,17 +597,6 @@ export default function HomePage() {
     if (selectedStockFilter) return `INTELLIGENCE WIRE: ${selectedStockFilter}`;
     if (searchQuery) return `SEARCH RESULTS: "${searchQuery.toUpperCase()}"`;
     if (activeCategory === 'portfolio') return '💼 CURATED PORTFOLIO & SECTOR INTELLIGENCE';
-    if (activeCategory === 'industry-chips') return '⚡ SEMICONDUCTOR & CHIP INDUSTRY WIRE';
-    if (activeCategory === 'industry-ai-cloud') return '🧠 AI & CLOUD INFRASTRUCTURE INTELLIGENCE';
-    if (activeCategory === 'industry-ev') return '🚗 EV, CLEAN ENERGY & MOBILITY';
-    if (activeCategory === 'industry-fintech') return '💳 FINTECH, BANKING & MACRO RADAR';
-    if (activeCategory === 'industry-biotech') return '🧬 BIOTECH, PHARMA & CLINICAL TRIALS';
-    if (activeCategory === 'industry-cyber') return '🛡️ CYBERSECURITY & DEFENSE TECHNOLOGY';
-    if (activeCategory === 'markets') return '📈 FINANCIAL MARKETS & STOCK INDICES';
-    if (activeCategory === 'tech') return '💻 TECHNOLOGY & SILICON VALLEY';
-    if (activeCategory === 'world') return '🌐 GLOBAL AFFAIRS & WORLD NEWS';
-    if (activeCategory === 'business') return '🏛️ BUSINESS, TRADE & COMMERCE';
-    if (activeCategory === 'science') return '🔬 SCIENCE & SPACE BREAKTHROUGHS';
     return 'FRONT PAGE TOP STORIES';
   };
 
@@ -551,10 +648,13 @@ export default function HomePage() {
           onSelectCategory={handleSelectCategory}
           savedCount={savedArticles.length}
           portfolioCount={portfolio.length}
+          sectorSymbols={sectorSymbols}
+          activeSectorFilter={selectedStockFilter}
+          onSelectSector={handleSelectSectorPill}
         />
 
-        {/* Analyst-First Intelligence Briefing: what changed, why it matters, portfolio risk */}
-        {(activeCategory === 'portfolio' || activeCategory === 'all') && !searchQuery && (
+        {/* Front Page: Analyst-First Portfolio Analytics Brief */}
+        {activeCategory === 'brief' && !searchQuery && (
           <IntelligenceBriefing
             briefing={briefing}
             canonicalEvents={canonicalEvents}
@@ -567,10 +667,13 @@ export default function HomePage() {
             onOpenResearchTrace={() => setIsResearchTraceModalOpen(true)}
             onOpenPortfolioProfile={() => setIsPortfolioProfileModalOpen(true)}
             onOpenManagePortfolio={() => setIsPortfolioModalOpen(true)}
+            onOpenDeepDive={handleOpenDeepDive}
           />
         )}
 
         {/* Section Headline Banner */}
+        {showWire && (
+        <>
         <div
           style={{
             display: 'flex',
@@ -745,6 +848,8 @@ export default function HomePage() {
             )}
           </>
         )}
+        </>
+        )}
       </main>
 
       {/* Portfolio Customization Modal */}
@@ -775,6 +880,21 @@ export default function HomePage() {
         isOpen={isPortfolioProfileModalOpen}
         onClose={() => setIsPortfolioProfileModalOpen(false)}
         profile={portfolioProfile}
+        customQuestions={customQuestions}
+        onAddCustomQuestion={handleAddCustomQuestion}
+        onRemoveCustomQuestion={handleRemoveCustomQuestion}
+      />
+
+      {/* Holistic Portfolio Deep Dive — brief long-form analytical read */}
+      <PortfolioDeepDiveModal
+        isOpen={isDeepDiveOpen}
+        report={deepDiveReport}
+        isLoading={isLoadingDeepDive}
+        onClose={() => setIsDeepDiveOpen(false)}
+        onRegenerate={() => {
+          setDeepDiveReport(null);
+          fetchDeepDiveReport();
+        }}
       />
 
       {/* Research Trace & Blackboard Inspector Modal */}

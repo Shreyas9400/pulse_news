@@ -50,6 +50,17 @@ export default function EntityDetailModal({ item, onClose, onOpenResearchTrace }
         <div className="detail-section">
           <div className="detail-section-title">What Changed</div>
           <p className="detail-section-body">{item.whatChanged}</p>
+          {item.metrics.length > 0 && (
+            <div className="dd-metrics-row" style={{ marginTop: 10 }}>
+              {item.metrics.map((m, mi) => (
+                <span key={mi} className="dd-metric-chip">
+                  <span className="dd-metric-label">{m.label}:</span>{' '}
+                  {m.from && <span className="dd-metric-from">{m.from} → </span>}
+                  <strong>{m.to}</strong>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="detail-section">

@@ -43,6 +43,7 @@ export class ResearchControlLoop {
     entities: string[];
     maxDepth?: number;
     maxQueries?: number;
+    customQuestions?: string[];
   }): Promise<ResearchRunResult> {
     const startedAt = new Date().toISOString();
     const runId = `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -84,6 +85,33 @@ export class ResearchControlLoop {
         });
         board.taskQueue.push(task);
       }
+    }
+
+    // 3b. Seed user-submitted research questions as high-priority discovery tasks,
+    // anchored to whichever portfolio entity they best match (fallback: first holding)
+    for (const question of (params.customQuestions || []).slice(0, 5)) {
+      const lowerQ = question.toLowerCase();
+      const matchedEntityId = params.entities.find((e) => {
+        const canonical = resolveCanonicalEntity(e);
+        return (
+          lowerQ.includes(e.toLowerCase()) ||
+          lowerQ.includes(canonical.canonicalName.toLowerCase()) ||
+          canonical.aliases.some((a) => lowerQ.includes(a.toLowerCase()))
+        );
+      }) || params.entities[0];
+
+      const anchorEntity = resolveCanonicalEntity(matchedEntityId);
+      const task = createResearchTask({
+        runId,
+        entityId: anchorEntity.id,
+        taskType: 'DISCOVERY',
+        question,
+        perspective: 'EVENT',
+        materialityEstimate: 70,
+        expectedInformationGain: 85,
+        depth: 1,
+      });
+      board.taskQueue.push(task);
     }
 
     // 4. Decision Control Loop: Execute tasks ranked by Information Gain

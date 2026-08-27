@@ -330,6 +330,220 @@ Set "notify": true ONLY if materiality HIGH (redemption gating breach, non-accru
   return fallbackAnalysis;
 }
 
+export interface DeepDiveMetric {
+  label: string;
+  from?: string;
+  to: string;
+}
+
+export interface DeepDiveEntityCard {
+  symbol: string;
+  name: string;
+  tone: 'red' | 'amber' | 'green' | 'gray';
+  statusLabel: string;
+  confirmedFacts: string[];
+  metrics: DeepDiveMetric[];
+  whyItMatters: string;
+  creditRiskInterpretation: string;
+}
+
+export interface DeepDiveDashboardRow {
+  holding: string;
+  tone: 'red' | 'amber' | 'green' | 'gray';
+  signal: string;
+  watching: string;
+}
+
+export interface PortfolioDeepDiveReport {
+  title: string;
+  generatedAt: string;
+  bottomLineSummary: string;
+  entityCards: DeepDiveEntityCard[];
+  dashboard: DeepDiveDashboardRow[];
+  takeaway: string;
+}
+
+export interface DeepDiveMaterialChange {
+  symbol: string;
+  entity: string;
+  headline: string;
+  whatChanged: string;
+  whyItMatters: string;
+  riskState: string;
+  tone: 'red' | 'amber' | 'green' | 'gray';
+  confidence: string;
+  facts: string[];
+  metrics: DeepDiveMetric[];
+}
+
+/**
+ * Synthesizes a brief, holistic, per-holding analytical read across the entire portfolio
+ * from already-gathered research context (no new scraping) — a single senior-analyst pass
+ * over what the research engine has already established. Grounded strictly in the facts and
+ * metrics actually supplied; never invents figures that weren't provided.
+ */
+export async function generatePortfolioDeepDive(params: {
+  domain: string;
+  entities: Array<{ symbol: string; name: string }>;
+  materialChanges: DeepDiveMaterialChange[];
+  quietEntities: Array<{ entity: string; status: string }>;
+  crossSynthesisSummary?: string;
+}): Promise<PortfolioDeepDiveReport> {
+  const { domain, entities, materialChanges, quietEntities, crossSynthesisSummary } = params;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const generatedAt = new Date().toISOString();
+
+  const formatMetricsBlock = (metrics: DeepDiveMetric[]) =>
+    metrics.length > 0 ? metrics.map((m) => `${m.label}: ${m.from ? `${m.from} → ` : ''}${m.to}`).join('; ') : 'none captured yet';
+
+  if (apiKey) {
+    try {
+      const prompt = `You are a Veteran Senior Credit & Portfolio Research Analyst writing a per-holding portfolio review in the style of an institutional research note. Sector focus: ${domain.replace(/_/g, ' ')}.
+
+CRITICAL GROUND RULE: Only state facts, figures, and metrics that appear explicitly in the data below. Never invent a number, date, or figure that isn't given to you. If a holding lacks specific metrics, say monitoring is ongoing rather than fabricating one.
+
+PORTFOLIO HOLDINGS:
+${entities.map((e) => `- ${e.symbol}: ${e.name}`).join('\n')}
+
+MATERIAL DEVELOPMENTS THIS CYCLE (one holding may have multiple):
+${materialChanges.length > 0
+  ? materialChanges
+      .map(
+        (m) =>
+          `- [${m.symbol}] ${m.headline}\n  Risk state: ${m.riskState} (confidence: ${m.confidence})\n  What changed: ${m.whatChanged}\n  Why it matters: ${m.whyItMatters}\n  Confirmed facts: ${m.facts.join(' | ') || 'none beyond the above'}\n  Metrics: ${formatMetricsBlock(m.metrics)}`
+      )
+      .join('\n')
+  : 'No material developments identified this cycle.'}
+
+STABLE / QUIET HOLDINGS:
+${quietEntities.length > 0 ? quietEntities.map((q) => `- ${q.entity}: ${q.status}`).join('\n') : 'None recorded.'}
+
+CROSS-ENTITY SYNTHESIS: ${crossSynthesisSummary || 'Not yet established.'}
+
+Write the review as strict JSON, one card per holding that has a material development (skip fully quiet holdings — they're summarized in the dashboard only):
+{
+  "title": "A specific, dated-feeling title for this review (not generic)",
+  "bottomLineSummary": "2-3 sentences: the single most important takeaway across the whole portfolio right now, naming the specific holdings driving it.",
+  "entityCards": [
+    {
+      "symbol": "TICKER",
+      "name": "Full name",
+      "confirmedFacts": ["Restate the confirmed facts/metrics given for this holding as clean analyst prose bullet points — do not add new numbers"],
+      "whyItMatters": "1-2 sentences on the economic/investment implication, grounded in the given facts.",
+      "creditRiskInterpretation": "1-2 sentences of forward-looking analyst judgment: what this pattern typically means and what would confirm or invalidate it next cycle."
+    }
+  ],
+  "dashboard": [
+    { "holding": "SYMBOL", "watching": "The single most important next-cycle indicator for this holding, specific and concrete" }
+  ],
+  "takeaway": "2-4 sentences closing cross-portfolio credit-risk takeaway: what's the dominant systemic risk right now, what's the offsetting positive if any, and what sequence of events would escalate concern."
+}
+Include a dashboard row for every holding (both material and quiet). Do not include a "tone" or "status" field yourself — that will be attached separately.`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
+          }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          const parsed = JSON.parse(rawText);
+          if (parsed.title && parsed.entityCards) {
+            // Attach authoritative tone/status/metrics ourselves — never trust the model's own risk labeling
+            const findChange = (symbol: string) => materialChanges.find((m) => m.symbol === symbol);
+            const findQuiet = (holding: string) => quietEntities.find((q) => q.entity.toUpperCase().includes(holding.toUpperCase()));
+
+            const entityCards: DeepDiveEntityCard[] = (parsed.entityCards || []).map((c: any) => {
+              const match = findChange(c.symbol);
+              return {
+                symbol: c.symbol,
+                name: c.name || match?.entity || c.symbol,
+                tone: match?.tone || 'gray',
+                statusLabel: match?.riskState || 'STABLE',
+                confirmedFacts: c.confirmedFacts || match?.facts || [],
+                metrics: match?.metrics || [],
+                whyItMatters: c.whyItMatters || match?.whyItMatters || '',
+                creditRiskInterpretation: c.creditRiskInterpretation || '',
+              };
+            });
+
+            const dashboard: DeepDiveDashboardRow[] = (parsed.dashboard || []).map((d: any) => {
+              const match = findChange(d.holding);
+              const quiet = findQuiet(d.holding);
+              return {
+                holding: d.holding,
+                tone: match?.tone || (quiet ? 'green' : 'gray'),
+                signal: match?.riskState || 'STABLE',
+                watching: d.watching || quiet?.status || 'Routine monitoring',
+              };
+            });
+
+            return {
+              title: parsed.title,
+              generatedAt,
+              bottomLineSummary: parsed.bottomLineSummary || '',
+              entityCards,
+              dashboard,
+              takeaway: parsed.takeaway || '',
+            };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[GeminiDeepDive] Falling back to deterministic portfolio review:', e);
+    }
+  }
+
+  // Deterministic fallback: compose entity cards + dashboard directly from real research data, no invention
+  const distinctSymbolsWithChange = new Set(materialChanges.map((m) => m.symbol));
+  const negativeCount = materialChanges.filter((m) => m.tone === 'red').length;
+
+  const entityCards: DeepDiveEntityCard[] = Array.from(distinctSymbolsWithChange).map((symbol) => {
+    const changesForEntity = materialChanges.filter((m) => m.symbol === symbol);
+    const primary = changesForEntity[0];
+    return {
+      symbol,
+      name: primary.entity,
+      tone: primary.tone,
+      statusLabel: primary.riskState,
+      confirmedFacts: changesForEntity.flatMap((c) => (c.facts.length > 0 ? c.facts : [c.whatChanged])),
+      metrics: changesForEntity.flatMap((c) => c.metrics),
+      whyItMatters: primary.whyItMatters,
+      creditRiskInterpretation: `Confidence level: ${primary.confidence}. Continued monitoring will determine whether this development persists or reverses next cycle.`,
+    };
+  });
+
+  const dashboard: DeepDiveDashboardRow[] = [
+    ...entityCards.map((c) => ({ holding: c.symbol, tone: c.tone, signal: c.statusLabel, watching: c.whyItMatters })),
+    ...quietEntities
+      .filter((q) => !entityCards.some((c) => q.entity.toUpperCase().includes(c.symbol.toUpperCase())))
+      .map((q) => ({ holding: q.entity, tone: 'green' as const, signal: 'STABLE', watching: q.status })),
+  ];
+
+  return {
+    title: `Portfolio Review — ${domain.replace(/_/g, ' ').toUpperCase()}`,
+    generatedAt,
+    bottomLineSummary:
+      materialChanges.length === 0
+        ? `All ${entities.length} tracked holdings are currently stable with no material incremental developments this cycle.`
+        : `${distinctSymbolsWithChange.size} of ${entities.length} holdings show a material development this cycle, ${negativeCount > 0 ? `with ${negativeCount} flagged at elevated risk or higher` : 'though none currently rise to elevated risk'}.`,
+    entityCards,
+    dashboard,
+    takeaway:
+      crossSynthesisSummary ||
+      'Risk remains concentrated at the individual-holding level with no confirmed systemic pattern this cycle. Continued surveillance will determine whether isolated developments broaden into a sector-wide theme.',
+  };
+}
+
 /**
  * Generate 3 bullet credit risk analyst takeaway for an individual article/event
  */

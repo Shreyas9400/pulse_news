@@ -16,13 +16,15 @@ export class ResearchJobs {
    */
   public static async triggerPortfolioResearch(
     portfolioId: string,
-    entities: string[]
+    entities: string[],
+    customQuestions?: string[]
   ): Promise<ResearchRunResult> {
     const result = await ResearchControlLoop.executeResearchCycle({
       portfolioId,
       entities,
       maxDepth: 3,
       maxQueries: 25,
+      customQuestions,
     });
 
     ACTIVE_RUNS.set(result.runId, result);
