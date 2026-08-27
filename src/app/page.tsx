@@ -4,8 +4,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Header from '@/components/Header';
 import BreakingTicker from '@/components/BreakingTicker';
 import ChannelFilter from '@/components/ChannelFilter';
-import BriefingHero from '@/components/BriefingHero';
-import PortfolioOverview, { PortfolioEntitySummary } from '@/components/PortfolioOverview';
+import IntelligenceBriefing, { ChangeItem } from '@/components/IntelligenceBriefing';
+import EntityDetailModal from '@/components/EntityDetailModal';
 import NewsFilterBar from '@/components/NewsFilterBar';
 import NewsCard from '@/components/NewsCard';
 import ReaderModal from '@/components/ReaderModal';
@@ -16,10 +16,9 @@ import EntityDossierModal from '@/components/EntityDossierModal';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import ResearchTraceModal from '@/components/ResearchTraceModal';
 import PortfolioIntelligenceModal from '@/components/PortfolioIntelligenceModal';
-import EventTimelineCard from '@/components/EventTimelineCard';
 import { NewsArticle, StockQuote, DailyBriefing, CategoryId, ResearchTrace, PortfolioIntelligenceProfile, CanonicalIntelligenceEvent } from '@/lib/types';
 import { getTickerMeta, isSectorEntity, TickerMetadata } from '@/lib/stock-aliases';
-import { RefreshCw, VolumeX, Sparkles, Database, Layers } from 'lucide-react';
+import { RefreshCw, VolumeX } from 'lucide-react';
 import { listenForFCMForegroundMessages } from '@/lib/firebase';
 import { syncPortfolioToFirebase, loadPortfolioFromFirebase } from '@/lib/firestore-sync';
 
@@ -72,6 +71,8 @@ export default function HomePage() {
   const [portfolioProfile, setPortfolioProfile] = useState<PortfolioIntelligenceProfile | null>(null);
   const [canonicalEvents, setCanonicalEvents] = useState<CanonicalIntelligenceEvent[]>([]);
   const [isDeepResearching, setIsDeepResearching] = useState(false);
+  const [selectedChangeItem, setSelectedChangeItem] = useState<ChangeItem | null>(null);
+  const lastResearchedPortfolioKeyRef = useRef<string>('');
 
   // Audio Speech state
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -239,10 +240,11 @@ export default function HomePage() {
 
           // Synthesize delta briefing into state
           if (data.result.deltaStories) {
+            const materialCount = (data.result.events || data.result.deltaStories).length;
             setBriefing({
               date: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }),
               greeting: `STATEFUL DELTA RESEARCH BRIEFING • ${(portfolioProfile?.primaryDomain || 'PORTFOLIO').toUpperCase()}`,
-              overview: `Stateful Research Cycle: ${data.result.deltaStories.length} material incremental developments identified. ${data.result.synthesisSummary}`,
+              overview: `Stateful Research Cycle: ${materialCount} material incremental development${materialCount === 1 ? '' : 's'} identified. ${data.result.synthesisSummary}`,
               marketMood: data.result.synthesisSummary,
               topStories: [],
               keyBulletPoints: data.result.deltaStories.map((d: any) => `${d.entityName}: ${d.whatChanged} — ${d.portfolioImpact}`),
@@ -261,6 +263,19 @@ export default function HomePage() {
       setIsDeepResearching(false);
     }
   }, [portfolio, portfolioProfile]);
+
+  // Auto-run the senior analyst research cycle whenever the mounted portfolio
+  // composition actually changes (covers initial default portfolio, then the
+  // real portfolio once localStorage/Firebase resolve) so the homepage always
+  // opens with a completed analysis instead of requiring a manual click.
+  useEffect(() => {
+    if (!isMounted || portfolio.length === 0) return;
+    const key = [...portfolio].sort().join(',');
+    if (key === lastResearchedPortfolioKeyRef.current) return;
+    lastResearchedPortfolioKeyRef.current = key;
+    triggerDeepResearchRun(portfolio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMounted, portfolio]);
 
   // Initial load + Dynamic auto-refresh intervals based on Settings (Default 60 min)
   useEffect(() => {
@@ -407,81 +422,6 @@ export default function HomePage() {
     }
   };
 
-  // Compute per-entity news summaries with material headline ranking
-  const entitySummaries: PortfolioEntitySummary[] = useMemo(() => {
-    if (!articles || articles.length === 0) return [];
-
-    const materialKeywords = [
-      'debt', 'earnings', 'credit', 'revenue', 'downgrade', 'upgrade', 'default',
-      'covenant', 'bonds', 'yield', 'acquisition', 'dividend', 'filing', 'results',
-      'cash flow', 'liquidity', 'quarterly', 'profit', 'rating', 'loss'
-    ];
-
-    return portfolio.map((symbol) => {
-      const meta = getTickerMeta(symbol);
-      const searchTerms = meta
-        ? [symbol.toLowerCase(), meta.name.toLowerCase(), ...meta.aliases.map((a) => a.toLowerCase())]
-        : [symbol.toLowerCase()];
-
-      const matchingArticles = articles.filter((article) => {
-        const textToSearch = `${article.title} ${article.description} ${article.source}`.toLowerCase();
-        return searchTerms.some((term) => textToSearch.includes(term));
-      });
-
-      if (matchingArticles.length === 0) {
-        return {
-          symbol,
-          sentiment: 'neutral' as const,
-          headline: 'NO RECENT BREAKING NEWS DETECTED.',
-          newsCount: 0,
-        };
-      }
-
-      // Rank matching articles by credit materiality & recency
-      const rankedArticles = [...matchingArticles].sort((a, b) => {
-        const textA = `${a.title} ${a.description}`.toLowerCase();
-        const textB = `${b.title} ${b.description}`.toLowerCase();
-
-        let scoreA = 0;
-        let scoreB = 0;
-
-        materialKeywords.forEach((kw) => {
-          if (textA.includes(kw)) scoreA += 2;
-          if (textB.includes(kw)) scoreB += 2;
-        });
-
-        if (a.sentiment === 'negative' || a.sentiment === 'positive') scoreA += 1;
-        if (b.sentiment === 'negative' || b.sentiment === 'positive') scoreB += 1;
-
-        if (scoreB !== scoreA) return scoreB - scoreA;
-        return b.timestamp - a.timestamp;
-      });
-
-      const bestArticle = rankedArticles[0];
-
-      let posCount = 0;
-      let negCount = 0;
-      matchingArticles.forEach((a) => {
-        if (a.sentiment === 'positive') posCount++;
-        else if (a.sentiment === 'negative') negCount++;
-      });
-
-      let aggregateSentiment: 'positive' | 'neutral' | 'negative' = 'neutral';
-      if (posCount > negCount) aggregateSentiment = 'positive';
-      else if (negCount > posCount) aggregateSentiment = 'negative';
-
-      return {
-        symbol,
-        sentiment: aggregateSentiment,
-        headline: bestArticle.title.length > 95
-          ? bestArticle.title.substring(0, 92) + '...'
-          : bestArticle.title,
-        newsCount: matchingArticles.length,
-      };
-    });
-  }, [articles, portfolio]);
-
-  const userPortfolioQuotes = stockQuotes.filter((q) => portfolio.includes(q.symbol));
   const rawDisplayedArticles = activeCategory === 'saved' ? savedArticles : articles;
 
   // Filtered & Sorted Articles
@@ -613,65 +553,21 @@ export default function HomePage() {
           portfolioCount={portfolio.length}
         />
 
-        {/* Executive Portfolio & Sectors Dashboard Panel */}
+        {/* Analyst-First Intelligence Briefing: what changed, why it matters, portfolio risk */}
         {(activeCategory === 'portfolio' || activeCategory === 'all') && !searchQuery && (
-          <PortfolioOverview
-            quotes={userPortfolioQuotes}
-            portfolioSymbols={portfolio}
-            onOpenManageModal={() => setIsPortfolioModalOpen(true)}
-            onSelectSymbolFilter={handleSelectStockFilter}
-            selectedSymbolFilter={selectedStockFilter}
-            onRefreshQuotes={() => fetchLiveQuotes()}
-            isLoadingQuotes={isLoadingQuotes}
-            onRemoveSymbol={handleRemoveSymbol}
-            entitySummaries={entitySummaries}
-            onOpenDossier={(sym) => setDossierSymbol(sym)}
-            onOpenPortfolioProfile={() => setIsPortfolioProfileModalOpen(true)}
-            onTriggerResearchRun={() => triggerDeepResearchRun()}
-            isResearching={isDeepResearching}
-          />
-        )}
-
-        {/* AI Delta Briefing Section */}
-        {activeCategory === 'all' && !searchQuery && (
-          <BriefingHero
+          <IntelligenceBriefing
             briefing={briefing}
-            onPlayBriefingAudio={handlePlayAudio}
-            isSpeaking={isSpeaking}
-            onSelectArticle={setReaderArticle}
+            canonicalEvents={canonicalEvents}
+            portfolioProfile={portfolioProfile}
+            portfolioSymbols={portfolio}
+            isResearching={isDeepResearching}
+            onRefreshAnalysis={() => triggerDeepResearchRun()}
+            onOpenChangeDetail={(item) => setSelectedChangeItem(item)}
+            onOpenEntityDossier={(sym) => setDossierSymbol(sym)}
             onOpenResearchTrace={() => setIsResearchTraceModalOpen(true)}
             onOpenPortfolioProfile={() => setIsPortfolioProfileModalOpen(true)}
+            onOpenManagePortfolio={() => setIsPortfolioModalOpen(true)}
           />
-        )}
-
-        {/* Canonical Intelligence Events Timeline */}
-        {canonicalEvents.length > 0 && !searchQuery && (
-          <div style={{ margin: '20px 0 10px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Layers size={16} className="text-cyan-400" />
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em' }}>
-                  ACTIVE CANONICAL INTELLIGENCE EVENTS ({canonicalEvents.length})
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsResearchTraceModalOpen(true)}
-                style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer' }}
-              >
-                View Blackboard Trace →
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-              {canonicalEvents.map((evt) => (
-                <EventTimelineCard
-                  key={evt.eventId}
-                  event={evt}
-                  onOpenTrace={() => setIsResearchTraceModalOpen(true)}
-                />
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Section Headline Banner */}
@@ -887,6 +783,18 @@ export default function HomePage() {
         onClose={() => setIsResearchTraceModalOpen(false)}
         trace={researchTrace}
       />
+
+      {/* Analyst Detail View — progressive disclosure for a single "What Changed" item */}
+      {selectedChangeItem && (
+        <EntityDetailModal
+          item={selectedChangeItem}
+          onClose={() => setSelectedChangeItem(null)}
+          onOpenResearchTrace={() => {
+            setSelectedChangeItem(null);
+            setIsResearchTraceModalOpen(true);
+          }}
+        />
+      )}
 
       {/* AI-Generated Entity & Sector Intelligence Dossier Dashboard */}
       <EntityDossierModal
