@@ -64,13 +64,22 @@ export class ResearchControlLoop {
     });
     board.status = 'ACTIVE';
 
-    // 3. Queue Initial Discovery Tasks for all portfolio holdings
+    // 3. Queue Initial Discovery Tasks for all portfolio holdings.
+    // Search topics are built from the domain's actual monitored metrics (NAV, non-accrual
+    // rate, redemption capacity...) rather than a truncated slice of prose — those metric
+    // names are what specialist reporting and filings actually key on.
+    const monitoredTopics = (profile.keyMetricsToMonitor || [])
+      .slice(0, 4)
+      .map((m) => m.replace(/\s*\([^)]*\)/g, '').trim())
+      .filter(Boolean)
+      .join(' ');
+
     for (const entityId of params.entities) {
       const canonical = resolveCanonicalEntity(entityId);
       const initialQueries = generateDiversifiedQueries({
         entityName: canonical.canonicalName,
         ticker: canonical.primaryTicker,
-        topicOrQuestion: profile.level1DomainKnowledge.slice(0, 50),
+        topicOrQuestion: monitoredTopics || 'latest results and disclosures',
         domain: profile.primaryDomain,
       });
 
@@ -174,21 +183,31 @@ export class ResearchControlLoop {
     // 4b. Senior analyst reasoning pass — one per entity, in parallel.
     // Immaterial noise (marketing pages, explainers, directory listings) is dropped here
     // rather than padding the briefing.
-    const analysisResults = await Promise.all(
-      Array.from(evidenceByEntity.entries()).map(async ([entityId, evidenceList]) => {
-        const canonical = resolveCanonicalEntity(entityId);
-        const kState = await getEntityKnowledgeState(canonical.id);
-        const analyses = await analyzeEvidenceForEntity({
-          entityName: canonical.canonicalName,
-          entityTicker: canonical.primaryTicker,
-          domain: profile.primaryDomain,
-          evidence: evidenceList,
-          priorStateSummary: kState.currentBeliefs.statusSummary,
-          monitoringQuestions: kState.currentBeliefs.monitoringQuestions,
-        });
-        return { entityId, analyses, evidenceCount: evidenceList.length };
-      })
-    );
+    // Bounded concurrency: analysis providers enforce per-minute request limits, and
+    // firing every holding at once trips them, silently degrading the whole cycle.
+    const ANALYSIS_CONCURRENCY = 2;
+    const entityEntries = Array.from(evidenceByEntity.entries());
+    const analysisResults: Array<{ entityId: string; analyses: any[]; evidenceCount: number }> = [];
+
+    for (let i = 0; i < entityEntries.length; i += ANALYSIS_CONCURRENCY) {
+      const batch = entityEntries.slice(i, i + ANALYSIS_CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map(async ([entityId, evidenceList]) => {
+          const canonical = resolveCanonicalEntity(entityId);
+          const kState = await getEntityKnowledgeState(canonical.id);
+          const analyses = await analyzeEvidenceForEntity({
+            entityName: canonical.canonicalName,
+            entityTicker: canonical.primaryTicker,
+            domain: profile.primaryDomain,
+            evidence: evidenceList,
+            priorStateSummary: kState.currentBeliefs.statusSummary,
+            monitoringQuestions: kState.currentBeliefs.monitoringQuestions,
+          });
+          return { entityId, analyses, evidenceCount: evidenceList.length };
+        })
+      );
+      analysisResults.push(...batchResults);
+    }
 
     for (const { entityId, analyses, evidenceCount } of analysisResults) {
       const canonical = resolveCanonicalEntity(entityId);
@@ -204,12 +223,21 @@ export class ResearchControlLoop {
       for (const analysis of analyses) {
         const { event } = buildEventFromAnalysis(analysis, entityId, params.portfolioId);
 
-        // Re-weight the analyst's materiality by this specific portfolio's exposure
-        event.materiality = assessEventMateriality({
+        // Re-weight magnitude for THIS portfolio's exposure, but keep the analyst's
+        // directional call, rationale and confidence — the materiality engine scores
+        // exposure by keyword and must not overrule reasoned judgment on direction.
+        const exposureWeighted = assessEventMateriality({
           event,
           portfolioProfile: profile,
           isDirectPortfolioHolding: true,
         });
+        event.materiality = {
+          ...exposureWeighted,
+          materialityScore: Math.max(exposureWeighted.materialityScore, analysis.materialityScore),
+          riskDirection: analysis.riskDirection,
+          confidenceScore: analysis.confidenceScore,
+          reasoning: analysis.reasoning || exposureWeighted.reasoning,
+        };
 
         if (!extractedEvents.some((e) => e.eventId === event.eventId)) {
           extractedEvents.push(event);

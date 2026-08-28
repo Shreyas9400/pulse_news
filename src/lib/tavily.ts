@@ -29,8 +29,10 @@ export async function searchTavilyForEntity(
     return { results: [], cached: false };
   }
 
-  const cleanQuery = entityNameOrSymbol.trim().toUpperCase();
-  const cacheKey = `tavily_${cleanQuery}`;
+  // Preserve the caller's actual research question — upper-casing and keyword-stuffing it
+  // destroys the specificity that makes Tavily worth calling.
+  const cleanQuery = entityNameOrSymbol.trim();
+  const cacheKey = `tavily_${cleanQuery.toLowerCase().replace(/\s+/g, '_').slice(0, 80)}`;
 
   // Check cache first (unless user explicitly requested forceFresh)
   if (!options?.forceFresh) {
@@ -43,22 +45,24 @@ export async function searchTavilyForEntity(
   try {
     const searchBody = {
       api_key: apiKey,
-      query: `${cleanQuery} credit rating debt bond yield balance sheet SEC earnings`,
+      query: cleanQuery,
       topic: 'news',
       search_depth: 'advanced',
       max_results: options?.maxResults || 6,
-      include_domains: [
-        'sec.gov',
-        'bloomberg.com',
-        'reuters.com',
-        'wsj.com',
-        'spglobal.com',
-        'moodys.com',
-        'fitchratings.com',
-        'marketwatch.com',
-        'cnbc.com',
-        'ft.com',
-        'finance.yahoo.com',
+      // Deliberately NOT using include_domains: a narrow whitelist filtered out exactly the
+      // specialist outlets that break private-credit stories (PitchBook, Alternative Credit
+      // Investor, AltsWire, Investing.com). We instead exclude known low-signal domains and
+      // let the downstream source-tier scoring rank what remains.
+      exclude_domains: [
+        'linkedin.com',
+        'reddit.com',
+        'x.com',
+        'twitter.com',
+        'facebook.com',
+        'youtube.com',
+        'tiktok.com',
+        'quora.com',
+        'pinterest.com',
       ],
     };
 

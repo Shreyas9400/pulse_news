@@ -14,6 +14,7 @@
 
 import { EvidenceItem, MetricDelta, MaterialityAssessment } from './types';
 import { assessContentQuality, stripBoilerplatePrefix } from './content-quality';
+import { callGemini, getApiKey, getAnalysisUnavailableReason } from './gemini-client';
 
 export interface AnalyzedEventSource {
   url: string;
@@ -49,7 +50,26 @@ export interface AnalyzedEvent {
   sources: AnalyzedEventSource[];
 }
 
-const GEMINI_MODEL = 'gemini-1.5-pro';
+/**
+ * Analysis cache. Reasoning over the same evidence twice returns the same answer but
+ * costs another API request — and provider free tiers allow very few. Keyed on the
+ * entity plus a digest of the evidence actually analysed, so it self-invalidates the
+ * moment new sources arrive.
+ */
+const ANALYSIS_CACHE = new Map<string, { at: number; result: AnalyzedEvent[] }>();
+const ANALYSIS_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function analysisCacheKey(entityName: string, evidence: EvidenceItem[]): string {
+  const digest = evidence
+    .map((e) => e.sourceUrl)
+    .sort()
+    .join('|');
+  let hash = 0;
+  for (let i = 0; i < digest.length; i++) {
+    hash = (hash * 31 + digest.charCodeAt(i)) | 0;
+  }
+  return `${entityName.toLowerCase()}::${hash}`;
+}
 
 function toSource(ev: EvidenceItem): AnalyzedEventSource {
   return {
@@ -114,9 +134,15 @@ export async function analyzeEvidenceForEntity(params: {
 
   if (usable.length === 0) return [];
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!getApiKey()) {
     return deterministicAnalysis(usable.map((u) => u.ev), entityName);
+  }
+
+  // Reuse a recent reasoning pass over identical evidence rather than spending another call
+  const cacheKey = analysisCacheKey(entityName, usable.map((u) => u.ev));
+  const cached = ANALYSIS_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.at < ANALYSIS_TTL_MS) {
+    return cached.result;
   }
 
   const evidenceBlock = usable
@@ -140,6 +166,14 @@ ABSOLUTE RULES:
 2. MATERIALITY: Most scraped content is NOT a material development. Marketing pages, fund descriptions, generic sector explainers, directory listings, "what is private credit" explainers, and articles that merely mention the holding in passing are NOT material — set isMaterial:false for these. Only a genuine, specific, NEW development (an earnings result, a filing disclosure, a redemption/tender action, a rating change, a non-accrual move, a NAV change, a credit facility action, a management/strategy change) is material.
 3. SPECIFICITY: Never write generic filler such as "assessing potential portfolio implications" or "this is something to monitor". If you cannot say something specific and grounded, the item is not material.
 4. DEDUPLICATION: If several sources describe the SAME development, emit ONE event citing all of their indices.
+5. ROUTINE FILINGS: A filing that merely EXISTS is not a development. "Company filed an N-CEN/N-PX/Form 4/8-K" with no disclosed content is administrative noise — set isMaterial:false. Only report a filing when the sources state what it actually DISCLOSED.
+6. RISK DIRECTION — call it honestly, do not default to NEUTRAL:
+   - NEGATIVE: any credit deterioration — non-accruals rising, NAV declining, leverage increasing, income falling, redemptions building, coverage weakening, rating pressure.
+   - POSITIVE: deleveraging, NAV growth, non-accrual cures, improved coverage, funding access reopening, upgrades.
+   - MIXED: genuinely offsetting moves (e.g. income up but asset quality down) — use this rather than NEUTRAL when both directions are present.
+   - NEUTRAL: reserve for genuinely directionless information only.
+   Deteriorating asset quality is NEGATIVE even when income still covers the dividend.
+7. UNITS: embed the unit directly in every metric value string — write "$16.65", "3.2%", "$62.3M", "1.22x", never a bare number like "16.65" or "77.6".
 
 Return strict JSON — an array of the genuine developments found (empty array if none are material):
 [
@@ -150,7 +184,8 @@ Return strict JSON — an array of the genuine developments found (empty array i
     "whatChanged": "1-2 sentences stating exactly what changed versus the prior known state, with the specific figures from the sources.",
     "whyItMatters": "1-2 sentences on the actual credit/liquidity/valuation implication for a holder. Be concrete about the mechanism.",
     "metrics": [
-      { "metricName": "Non-Accrual Rate", "previousValue": "1.4%", "currentValue": "3.2%", "unit": "%", "asOfDate": "Q2 2026" }
+      { "metricName": "Non-Accrual Rate", "previousValue": "1.4%", "currentValue": "3.2%", "unit": "%", "asOfDate": "Q2 2026" },
+      { "metricName": "NAV per share", "currentValue": "$16.65", "unit": "USD", "asOfDate": "Q2 2026" }
     ],
     "factsEstablished": [
       "Each discrete fact the sources establish, written as clean analyst prose with its figure"
@@ -167,34 +202,20 @@ Return strict JSON — an array of the genuine developments found (empty array i
     "reasoning": "1 sentence on why you scored materiality where you did."
   }
 ]
-Set "metrics" to [] if no quantitative deltas appear in the sources. Only include a metric when the figure is explicitly in the source material.`;
+METRICS RULE: Extract EVERY hard figure the sources state for this holding — NAV per share, non-accrual rate, net investment income, dividend, leverage/debt-to-equity, redemption or tender percentages, portfolio fair value, first-lien percentage, undrawn capacity. Include "previousValue" ONLY when the source itself states the prior figure; otherwise give just "currentValue" as a point-in-time reading. Never leave metrics empty when the sources contain figures, and never write a figure that is not in the sources.`;
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.2, topP: 0.8 },
-        }),
-      }
-    );
+    const result = await callGemini({ prompt, tier: 'quality', temperature: 0.2, topP: 0.8 });
 
-    if (!res.ok) {
-      console.warn('[AnalysisEngine] Gemini call failed:', res.status);
+    if (!result.ok || !result.text) {
+      console.warn('[AnalysisEngine] Analysis unavailable:', result.error);
       return deterministicAnalysis(usable.map((u) => u.ev), entityName);
     }
 
-    const data = await res.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) return deterministicAnalysis(usable.map((u) => u.ev), entityName);
-
-    const parsed = JSON.parse(rawText);
+    const parsed = JSON.parse(result.text);
     const list = Array.isArray(parsed) ? parsed : parsed.events || [];
 
-    return list
+    const analyzed: AnalyzedEvent[] = list
       .filter((item: any) => item && item.isMaterial !== false && item.headline)
       .map((item: any): AnalyzedEvent => {
         // Map the model's source indices back to real evidence records for attribution
@@ -210,13 +231,22 @@ Set "metrics" to [] if no quantitative deltas appear in the sources. Only includ
           whatChanged: item.whatChanged || item.headline,
           whyItMatters: item.whyItMatters || '',
           metrics: Array.isArray(item.metrics)
-            ? item.metrics.map((m: any) => ({
-                metricName: m.metricName,
-                previousValue: m.previousValue,
-                currentValue: m.currentValue,
-                unit: m.unit,
-                asOfDate: m.asOfDate,
-              }))
+            ? item.metrics.map((m: any) => {
+                // Guarantee the unit is visible even if the model returned a bare number
+                const withUnit = (v: unknown) => {
+                  if (v === undefined || v === null || v === '') return undefined;
+                  const s = String(v).trim();
+                  if (!m.unit || /[%$x×]/i.test(s) || /[a-zA-Z]/.test(s)) return s;
+                  return m.unit === '%' ? `${s}%` : m.unit === 'USD' ? `$${s}` : `${s} ${m.unit}`;
+                };
+                return {
+                  metricName: m.metricName,
+                  previousValue: withUnit(m.previousValue),
+                  currentValue: withUnit(m.currentValue) ?? String(m.currentValue ?? ''),
+                  unit: m.unit,
+                  asOfDate: m.asOfDate,
+                };
+              })
             : [],
           factsEstablished: Array.isArray(item.factsEstablished) ? item.factsEstablished : [],
           openQuestions: Array.isArray(item.openQuestions) ? item.openQuestions : [],
@@ -230,6 +260,9 @@ Set "metrics" to [] if no quantitative deltas appear in the sources. Only includ
           sources,
         };
       });
+
+    ANALYSIS_CACHE.set(cacheKey, { at: Date.now(), result: analyzed });
+    return analyzed;
   } catch (e) {
     console.warn('[AnalysisEngine] Analysis error, using deterministic fallback:', e);
     return deterministicAnalysis(usable.map((u) => u.ev), entityName);
@@ -250,17 +283,18 @@ function deterministicAnalysis(evidence: EvidenceItem[], entityName: string): An
   const best = primary.sort((a, b) => b.specificityScore - a.specificityScore)[0];
   const cleaned = stripBoilerplatePrefix(best.snippet);
 
+  const cause = getAnalysisUnavailableReason();
+
   return [
     {
       isMaterial: true,
       headline: `${entityName}: disclosure from ${best.originalPublisher || best.publisher}`,
       whatChanged: cleaned.slice(0, 300),
-      whyItMatters:
-        'Automated reasoning is unavailable (no analysis API key configured), so this item is surfaced unanalysed from a primary/high-specificity source for manual review.',
+      whyItMatters: `Analyst reasoning did not run because ${cause}. This item is surfaced unanalysed from a primary/high-specificity source for manual review.`,
       metrics: [],
       factsEstablished: [cleaned.slice(0, 240)],
-      openQuestions: ['Full analyst interpretation pending — configure an analysis API key to enable reasoning.'],
-      nextTrigger: 'Enable the analysis engine to derive a confirmation trigger for this item.',
+      openQuestions: ['Full analyst interpretation pending — the reasoning engine did not run for this cycle.'],
+      nextTrigger: 'Restore the analysis engine to derive a confirmation trigger for this item.',
       riskDirection: 'NEUTRAL',
       materialityScore: 45,
       confidenceScore: best.authorityScore,

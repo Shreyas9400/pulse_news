@@ -1,4 +1,5 @@
 import { NewsArticle, DailyBriefing } from './types';
+import { callGemini, getApiKey } from './gemini-client';
 import {
   getCachedDossier,
   saveDossierCache,
@@ -53,21 +54,10 @@ Generate a rigorous, institutional-grade Credit Risk Executive Briefing formatte
   ]
 }`;
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
+      const geminiResult = await callGemini({ prompt, tier: 'fast' });
 
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (geminiResult.ok) {
+        const rawText = geminiResult.text;
         if (rawText) {
           const parsed = JSON.parse(rawText);
           return {
@@ -221,21 +211,10 @@ Respond ONLY with valid JSON:
 }
 Set "notify": true ONLY if materiality HIGH (redemption gating breach, non-accrual >3%, NAV erosion >5%, covenant breach, rating downgrade to HY/CCC).`;
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.3, topP: 0.85 },
-          }),
-        }
-      );
+      const geminiResult = await callGemini({ prompt, tier: 'quality', temperature: 0.3, topP: 0.85 });
 
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (geminiResult.ok) {
+        const rawText = geminiResult.text;
         if (rawText) {
           const parsed = JSON.parse(rawText);
 
@@ -440,21 +419,10 @@ Write the review as strict JSON, one card per holding that has a material develo
 }
 Include a dashboard row for every holding (both material and quiet). Do not include a "tone" or "status" field yourself — that will be attached separately.`;
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
-          }),
-        }
-      );
+      const geminiResult = await callGemini({ prompt, tier: 'quality', temperature: 0.3 });
 
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (geminiResult.ok) {
+        const rawText = geminiResult.text;
         if (rawText) {
           const parsed = JSON.parse(rawText);
           if (parsed.title && parsed.entityCards) {
@@ -629,21 +597,10 @@ Output strict JSON array:
   }
 ]`;
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
+      const geminiResult = await callGemini({ prompt, tier: 'fast' });
 
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (geminiResult.ok) {
+        const rawText = geminiResult.text;
         if (rawText) {
           const parsed = JSON.parse(rawText);
           if (Array.isArray(parsed)) {

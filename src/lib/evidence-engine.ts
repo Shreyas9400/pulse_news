@@ -7,8 +7,38 @@ import { EvidenceItem, SourceTier, EvidenceType, SourceLineageNode } from './typ
 
 // Authoritative domain ratings
 const PRIMARY_DOMAINS = ['sec.gov', 'investor.', 'treasury.gov', 'federalreserve.gov', 'courtlistener.com', 'fda.gov'];
-const TIER2_JOURNALISM_DOMAINS = ['ft.com', 'wsj.com', 'bloomberg.com', 'reuters.com', 'cnbc.com', 'barrons.com', 'institutionalinvestor.com'];
-const TIER3_MARKET_DOMAINS = ['finance.yahoo.com', 'investing.com', 'morningstar.com', 'seekingalpha.com', 'marketwatch.com', 'spglobal.com', 'moodys.com', 'fitchratings.com'];
+const TIER2_JOURNALISM_DOMAINS = [
+  'ft.com',
+  'wsj.com',
+  'bloomberg.com',
+  'reuters.com',
+  'cnbc.com',
+  'barrons.com',
+  'institutionalinvestor.com',
+  // Specialist private-credit / alternatives trade press — these break the redemption,
+  // non-accrual and fund-structure stories well before the generalist wires pick them up.
+  'pitchbook.com',
+  'alternativecreditinvestor.com',
+  'altswire.com',
+  'privatedebtinvestor.com',
+  'with.intelligence',
+  'creditflux.com',
+];
+const TIER3_MARKET_DOMAINS = [
+  'finance.yahoo.com',
+  'investing.com',
+  'morningstar.com',
+  'seekingalpha.com',
+  'marketwatch.com',
+  'spglobal.com',
+  'moodys.com',
+  'fitchratings.com',
+  'publicnow.com',
+  'streetinsider.com',
+  'stocktitan.net',
+  'nasdaq.com',
+  'fool.com',
+];
 const TIER4_ALT_DOMAINS = ['linkedin.com', 'twitter.com', 'x.com', 'reddit.com', 'medium.com', 'substack.com'];
 
 // Known syndication parents
