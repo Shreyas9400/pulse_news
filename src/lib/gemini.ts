@@ -367,8 +367,9 @@ export async function generatePortfolioDeepDive(params: {
   materialChanges: DeepDiveMaterialChange[];
   quietEntities: Array<{ entity: string; status: string }>;
   crossSynthesisSummary?: string;
+  preferredModel?: string;
 }): Promise<PortfolioDeepDiveReport> {
-  const { domain, entities, materialChanges, quietEntities, crossSynthesisSummary } = params;
+  const { domain, entities, materialChanges, quietEntities, crossSynthesisSummary, preferredModel } = params;
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   const generatedAt = new Date().toISOString();
 
@@ -419,7 +420,7 @@ Write the review as strict JSON, one card per holding that has a material develo
 }
 Include a dashboard row for every holding (both material and quiet). Do not include a "tone" or "status" field yourself — that will be attached separately.`;
 
-      const geminiResult = await callGemini({ prompt, tier: 'quality', temperature: 0.3 });
+      const geminiResult = await callGemini({ prompt, tier: 'quality', temperature: 0.3, preferredModel });
 
       if (geminiResult.ok) {
         const rawText = geminiResult.text;

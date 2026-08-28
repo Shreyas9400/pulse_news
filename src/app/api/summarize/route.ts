@@ -4,6 +4,9 @@ import { generateDailyBriefing, summarizeArticleLocally } from '@/lib/gemini';
 
 export const revalidate = 1800; // 30 min cache for executive briefing
 
+// Long-running: allow the platform max so slow upstream fetches do not surface as a 504.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   try {
     const articles = await getAggregatedNews({ category: 'all', limit: 15 });

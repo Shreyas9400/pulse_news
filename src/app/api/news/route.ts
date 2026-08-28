@@ -3,6 +3,9 @@ import { getAggregatedNews, getLiveMarketTickers } from '@/lib/news-aggregator';
 
 // Dynamic on-demand execution with edge caching headers
 export const dynamic = 'force-dynamic';
+
+// Long-running: allow the platform max so slow upstream fetches do not surface as a 504.
+export const maxDuration = 60;
 export const revalidate = 900;
 
 export async function GET(request: NextRequest) {

@@ -1,13 +1,16 @@
 'use client';
 
 import React from 'react';
-import { X, Sliders, Clock, Globe, Bell, Check, RotateCcw } from 'lucide-react';
+import { X, Sliders, Clock, Globe, Bell, Check, RotateCcw, Cpu } from 'lucide-react';
+import { SELECTABLE_MODELS, DEFAULT_MODEL_ID } from '@/lib/gemini-client';
 
 export interface AppSettings {
   newsRefreshIntervalMinutes: number; // 15, 30, 60, 0 (manual)
   quotesRefreshIntervalSeconds: number; // 30, 45, 120
   enableMultiEngineScraper: boolean;
   enableBreakingAlerts: boolean;
+  /** Gemini model used for the analyst reasoning pass. */
+  analysisModel: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -15,6 +18,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   quotesRefreshIntervalSeconds: 45,
   enableMultiEngineScraper: true,
   enableBreakingAlerts: true,
+  analysisModel: DEFAULT_MODEL_ID,
 };
 
 interface SettingsModalProps {
@@ -46,6 +50,10 @@ export default function SettingsModal({
 
   const handleToggleAlerts = () => {
     onUpdateSettings({ ...settings, enableBreakingAlerts: !settings.enableBreakingAlerts });
+  };
+
+  const handleSetAnalysisModel = (modelId: string) => {
+    onUpdateSettings({ ...settings, analysisModel: modelId });
   };
 
   const handleResetDefaults = () => {
@@ -193,6 +201,63 @@ export default function SettingsModal({
             >
               {settings.enableMultiEngineScraper ? 'ENABLED' : 'DISABLED'}
             </button>
+          </div>
+
+          {/* Setting 4: Analysis model — controls cost/throughput of the reasoning pass */}
+          <div style={{ background: 'var(--bg-secondary)', padding: 14, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Cpu size={15} color="var(--accent-gold)" />
+              <label style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                ANALYSIS MODEL
+              </label>
+            </div>
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.35, marginBottom: 10 }}>
+              Model used for the senior-analyst reasoning pass. The whole portfolio is analysed in a single
+              batched request per cycle, so free-tier daily limits go a long way.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {SELECTABLE_MODELS.map((m) => {
+                const isActive = (settings.analysisModel || DEFAULT_MODEL_ID) === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => handleSetAnalysisModel(m.id)}
+                    style={{
+                      textAlign: 'left',
+                      padding: '9px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      background: isActive ? 'rgba(212, 175, 55, 0.12)' : 'var(--bg-card)',
+                      border: `1px solid ${isActive ? 'var(--accent-gold)' : 'var(--border-subtle)'}`,
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {isActive && <Check size={12} color="var(--accent-gold)" />}
+                      <span style={{ fontSize: '0.78rem', fontWeight: 800 }}>{m.label}</span>
+                      {!m.freeTier && (
+                        <span
+                          style={{
+                            fontSize: '0.58rem',
+                            fontWeight: 800,
+                            padding: '1px 5px',
+                            borderRadius: 2,
+                            background: 'rgba(244, 63, 94, 0.15)',
+                            color: 'var(--accent-rose)',
+                            border: '1px solid rgba(244, 63, 94, 0.35)',
+                          }}
+                        >
+                          BILLING REQUIRED
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>{m.note}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

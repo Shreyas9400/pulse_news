@@ -3,6 +3,9 @@ import { getPortfolioIntelligenceProfile } from '@/lib/expertise-engine';
 
 export const dynamic = 'force-dynamic';
 
+// Long-running: allow the platform max so slow upstream fetches do not surface as a 504.
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

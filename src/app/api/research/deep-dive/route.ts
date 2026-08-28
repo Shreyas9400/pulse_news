@@ -3,10 +3,13 @@ import { generatePortfolioDeepDive } from '@/lib/gemini';
 
 export const dynamic = 'force-dynamic';
 
+// Long-running: allow the platform max so slow upstream fetches do not surface as a 504.
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { domain, entities = [], materialChanges = [], quietEntities = [], crossSynthesisSummary } = body;
+    const { domain, entities = [], materialChanges = [], quietEntities = [], crossSynthesisSummary, preferredModel } = body;
 
     if (!Array.isArray(entities) || entities.length === 0) {
       return NextResponse.json(
@@ -21,6 +24,7 @@ export async function POST(request: NextRequest) {
       materialChanges,
       quietEntities,
       crossSynthesisSummary,
+      preferredModel,
     });
 
     return NextResponse.json({ success: true, report });

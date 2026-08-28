@@ -111,6 +111,86 @@ export function materialityFromAnalysis(analysis: AnalyzedEvent): MaterialityAss
   };
 }
 
+export interface EntityAnalysisInput {
+  entityId: string;
+  entityName: string;
+  entityTicker?: string;
+  evidence: EvidenceItem[];
+  priorStateSummary?: string;
+  monitoringQuestions?: string[];
+}
+
+/** Max holdings folded into a single analysis request, to stay well inside token limits. */
+const MAX_ENTITIES_PER_CALL = 6;
+/** Max sources per holding included in a batched prompt. */
+const MAX_SOURCES_PER_ENTITY = 8;
+/** Max characters of each source's content sent for reasoning. */
+const MAX_SOURCE_CHARS = 700;
+
+/**
+ * Analyses the whole portfolio in as few API calls as possible.
+ *
+ * Cost design: reasoning is billed per request and free tiers cap requests per day, so
+ * all holdings are folded into one prompt (chunked only if the portfolio is large) rather
+ * than issuing one request per holding. A 6-holding portfolio costs 1 request, not 6.
+ */
+export async function analyzePortfolioEvidence(params: {
+  domain: string;
+  entities: EntityAnalysisInput[];
+  preferredModel?: string;
+}): Promise<Map<string, AnalyzedEvent[]>> {
+  const { domain, entities, preferredModel } = params;
+  const out = new Map<string, AnalyzedEvent[]>();
+
+  // Quality-gate every holding's evidence up front; drop holdings left with nothing
+  const prepared = entities
+    .map((e) => {
+      const usable = e.evidence
+        .map((ev) => ({ ev, quality: assessContentQuality(ev.snippet) }))
+        .filter((x) => x.quality.usable)
+        .sort((a, b) => b.quality.score - a.quality.score)
+        .slice(0, MAX_SOURCES_PER_ENTITY)
+        .map((x) => x.ev);
+      return { ...e, usable };
+    })
+    .filter((e) => e.usable.length > 0);
+
+  if (prepared.length === 0) return out;
+
+  if (!getApiKey()) {
+    for (const e of prepared) {
+      out.set(e.entityId, deterministicAnalysis(e.usable, e.entityName));
+    }
+    return out;
+  }
+
+  for (let i = 0; i < prepared.length; i += MAX_ENTITIES_PER_CALL) {
+    const chunk = prepared.slice(i, i + MAX_ENTITIES_PER_CALL);
+
+    // Serve from cache where the evidence set is unchanged, and only send the rest
+    const uncached: typeof chunk = [];
+    for (const e of chunk) {
+      const key = analysisCacheKey(e.entityName, e.usable);
+      const hit = ANALYSIS_CACHE.get(key);
+      if (hit && Date.now() - hit.at < ANALYSIS_TTL_MS) {
+        out.set(e.entityId, hit.result);
+      } else {
+        uncached.push(e);
+      }
+    }
+    if (uncached.length === 0) continue;
+
+    const batchResult = await runBatchedAnalysis(domain, uncached, preferredModel);
+    for (const e of uncached) {
+      const analyses = batchResult.get(e.entityId) ?? [];
+      out.set(e.entityId, analyses);
+      ANALYSIS_CACHE.set(analysisCacheKey(e.entityName, e.usable), { at: Date.now(), result: analyses });
+    }
+  }
+
+  return out;
+}
+
 /**
  * Runs the senior-analyst reasoning pass over all evidence gathered for one entity.
  * Returns one analyzed event per genuine development (immaterial noise is dropped).
@@ -267,6 +347,164 @@ METRICS RULE: Extract EVERY hard figure the sources state for this holding — N
     console.warn('[AnalysisEngine] Analysis error, using deterministic fallback:', e);
     return deterministicAnalysis(usable.map((u) => u.ev), entityName);
   }
+}
+
+/** Shared grounding rules — identical standards whether analysing one holding or many. */
+const ANALYST_RULES = `ABSOLUTE RULES:
+1. GROUNDING: Only state facts, figures, dates and metrics that appear VERBATIM in the source material. Never infer, estimate, or supply a number from your own knowledge. If a figure is not in the sources, do not mention it.
+2. MATERIALITY: Most scraped content is NOT a material development. Marketing pages, fund descriptions, generic sector explainers, "what is private credit" articles, directory listings, and articles that merely mention a holding in passing are NOT material — omit them entirely. Only a genuine, specific, NEW development (an earnings result, a filing disclosure, a redemption/tender action, a rating change, a non-accrual move, a NAV change, a credit facility action, a management/strategy change) qualifies.
+3. SPECIFICITY: Never write generic filler such as "assessing potential portfolio implications" or "this is something to monitor". If you cannot say something specific and grounded, omit the item.
+4. DEDUPLICATION: If several sources describe the SAME development, emit ONE event citing all of their indices.
+5. ROUTINE FILINGS: A filing that merely EXISTS is not a development. "Company filed an N-CEN/N-PX/Form 4/8-K" with no disclosed content is administrative noise — omit it. Only report a filing when the sources state what it actually DISCLOSED.
+6. RISK DIRECTION — call it honestly, do not default to NEUTRAL:
+   - NEGATIVE: any credit deterioration — non-accruals rising, NAV declining, leverage increasing, income falling, redemptions building, coverage weakening, rating pressure.
+   - POSITIVE: deleveraging, NAV growth, non-accrual cures, improved coverage, funding access reopening, upgrades.
+   - MIXED: genuinely offsetting moves (e.g. income up but asset quality down) — prefer this over NEUTRAL when both directions are present.
+   - NEUTRAL: reserve for genuinely directionless information only.
+   Deteriorating asset quality is NEGATIVE even when income still covers the dividend.
+7. UNITS: embed the unit directly in every metric value — write "$16.65", "3.2%", "$62.3M", "1.22x", never a bare number.
+8. METRICS: extract EVERY hard figure the sources state — NAV/share, non-accrual rate, net investment income, dividend, leverage, redemption or tender percentages, portfolio fair value, first-lien %, undrawn capacity. Include "previousValue" ONLY when the source itself states the prior figure.`;
+
+/**
+ * Executes one multi-holding analysis request and maps results back per entity.
+ * Sources are indexed globally across the batch so citations stay unambiguous.
+ */
+async function runBatchedAnalysis(
+  domain: string,
+  entities: Array<EntityAnalysisInput & { usable: EvidenceItem[] }>,
+  preferredModel?: string
+): Promise<Map<string, AnalyzedEvent[]>> {
+  const out = new Map<string, AnalyzedEvent[]>();
+
+  // Global source index -> evidence, so the model can cite [n] across all holdings
+  const indexed: EvidenceItem[] = [];
+  const blocks: string[] = [];
+
+  for (const e of entities) {
+    const lines = e.usable.map((ev) => {
+      indexed.push(ev);
+      const n = indexed.length;
+      return `  [${n}] ${ev.publisher} (${ev.sourceTier}) | ${ev.publishedAt}\n      ${stripBoilerplatePrefix(ev.snippet).slice(0, MAX_SOURCE_CHARS)}`;
+    });
+
+    blocks.push(
+      `### HOLDING key="${e.entityId}" — ${e.entityName}${e.entityTicker ? ` (${e.entityTicker})` : ''}\n` +
+        `PRIOR KNOWN STATE: ${e.priorStateSummary || 'No prior assessment on record.'}\n` +
+        (e.monitoringQuestions?.length
+          ? `STANDING QUESTIONS: ${e.monitoringQuestions.slice(0, 3).join(' | ')}\n`
+          : '') +
+        `SOURCES:\n${lines.join('\n')}`
+    );
+  }
+
+  const prompt = `You are a Veteran Senior Credit Risk Analyst covering ${domain.replace(/_/g, ' ')}. Analyse the source material for EACH holding below and produce institutional research output.
+
+${ANALYST_RULES}
+
+${blocks.join('\n\n')}
+
+Return strict JSON mapping each holding's key to its genuine developments. Use an empty array for a holding with no material development — that is a valid and common answer:
+{
+  "ENTITY_KEY": [
+    {
+      "sourceIndices": [1, 3],
+      "headline": "Specific development in under 10 words — the event, not the article title",
+      "whatChanged": "1-2 sentences stating exactly what changed versus the prior known state, with the specific figures from the sources.",
+      "whyItMatters": "1-2 sentences on the actual credit/liquidity/valuation implication. Be concrete about the mechanism.",
+      "metrics": [
+        { "metricName": "Non-Accrual Rate", "previousValue": "1.4%", "currentValue": "3.2%", "unit": "%", "asOfDate": "Q2 2026" }
+      ],
+      "factsEstablished": ["Each discrete fact the sources establish, as clean analyst prose with its figure"],
+      "openQuestions": ["A genuine unknown specific to THIS development"],
+      "nextTrigger": "The single next observable fact that would confirm or invalidate this assessment.",
+      "riskDirection": "NEGATIVE",
+      "materialityScore": 0-100,
+      "confidenceScore": 0-100,
+      "priorAssessment": "Short prior risk label, omit if unknown",
+      "newAssessment": "Short new risk label, omit if unknown",
+      "reasoning": "1 sentence on why you scored materiality where you did."
+    }
+  ]
+}
+Use EXACTLY the key strings given after key= for each holding.`;
+
+  const result = await callGemini({
+    prompt,
+    tier: 'quality',
+    temperature: 0.2,
+    topP: 0.8,
+    preferredModel,
+  });
+
+  if (!result.ok || !result.text) {
+    console.warn('[AnalysisEngine] Batched analysis unavailable:', result.error);
+    for (const e of entities) out.set(e.entityId, deterministicAnalysis(e.usable, e.entityName));
+    return out;
+  }
+
+  try {
+    const parsed = JSON.parse(result.text);
+    for (const e of entities) {
+      const raw = parsed[e.entityId] ?? parsed[e.entityName] ?? [];
+      const list = Array.isArray(raw) ? raw : [];
+      out.set(
+        e.entityId,
+        list
+          .filter((item: any) => item && item.headline)
+          .map((item: any) => mapAnalyzedItem(item, indexed, e.usable))
+      );
+    }
+  } catch (err) {
+    console.warn('[AnalysisEngine] Batched analysis parse error:', err);
+    for (const e of entities) out.set(e.entityId, deterministicAnalysis(e.usable, e.entityName));
+  }
+
+  return out;
+}
+
+/** Normalises one model-emitted development into an AnalyzedEvent with real attribution. */
+function mapAnalyzedItem(item: any, indexed: EvidenceItem[], fallbackEvidence: EvidenceItem[]): AnalyzedEvent {
+  const indices: number[] = Array.isArray(item.sourceIndices) ? item.sourceIndices : [];
+  const cited = indices.map((i) => indexed[i - 1]).filter((e): e is EvidenceItem => !!e);
+  const sources = (cited.length > 0 ? cited : fallbackEvidence.slice(0, 1)).map(toSource);
+
+  const metrics: MetricDelta[] = Array.isArray(item.metrics)
+    ? item.metrics.map((m: any) => {
+        const withUnit = (v: unknown) => {
+          if (v === undefined || v === null || v === '') return undefined;
+          const s = String(v).trim();
+          // Models sometimes emit a placeholder for "no prior figure" — that is not a delta
+          if (/^(n\/?a|none|null|unknown|-{1,2})$/i.test(s)) return undefined;
+          if (!m.unit || /[%$x×]/i.test(s) || /[a-zA-Z]/.test(s)) return s;
+          return m.unit === '%' ? `${s}%` : m.unit === 'USD' ? `$${s}` : `${s} ${m.unit}`;
+        };
+        return {
+          metricName: m.metricName,
+          previousValue: withUnit(m.previousValue),
+          currentValue: withUnit(m.currentValue) ?? String(m.currentValue ?? ''),
+          unit: m.unit,
+          asOfDate: m.asOfDate,
+        };
+      })
+    : [];
+
+  return {
+    isMaterial: true,
+    headline: item.headline,
+    whatChanged: item.whatChanged || item.headline,
+    whyItMatters: item.whyItMatters || '',
+    metrics,
+    factsEstablished: Array.isArray(item.factsEstablished) ? item.factsEstablished : [],
+    openQuestions: Array.isArray(item.openQuestions) ? item.openQuestions : [],
+    nextTrigger: item.nextTrigger || '',
+    riskDirection: item.riskDirection || 'NEUTRAL',
+    materialityScore: typeof item.materialityScore === 'number' ? item.materialityScore : 50,
+    confidenceScore: typeof item.confidenceScore === 'number' ? item.confidenceScore : 60,
+    priorAssessment: item.priorAssessment,
+    newAssessment: item.newAssessment,
+    reasoning: item.reasoning || '',
+    sources,
+  };
 }
 
 /**

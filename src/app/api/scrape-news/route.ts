@@ -3,6 +3,9 @@ import { scrapeMultiEngineNews } from '@/lib/html-scraper';
 
 export const dynamic = 'force-dynamic';
 
+// Long-running: allow the platform max so slow upstream fetches do not surface as a 504.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

@@ -19,7 +19,7 @@ import { challengePreliminaryConclusion } from './adversarial-engine';
 import { synthesizeCrossPortfolioPatterns } from './cross-entity-engine';
 import { getEntityKnowledgeState, commitStateTransition, calculateKnowledgeDelta } from './knowledge-engine';
 import { buildEventFromAnalysis, getAllCanonicalEvents } from './event-engine';
-import { analyzeEvidenceForEntity } from './analysis-engine';
+import { analyzePortfolioEvidence } from './analysis-engine';
 import { assessEventMateriality, getEscalationRequirement } from './materiality-engine';
 import { EvidenceItem } from './types';
 import { resolveCanonicalEntity } from './entity-resolver';
@@ -46,6 +46,8 @@ export class ResearchControlLoop {
     maxDepth?: number;
     maxQueries?: number;
     customQuestions?: string[];
+    /** User-selected analysis model from Settings. */
+    preferredModel?: string;
   }): Promise<ResearchRunResult> {
     const startedAt = new Date().toISOString();
     const runId = `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -183,31 +185,36 @@ export class ResearchControlLoop {
     // 4b. Senior analyst reasoning pass — one per entity, in parallel.
     // Immaterial noise (marketing pages, explainers, directory listings) is dropped here
     // rather than padding the briefing.
-    // Bounded concurrency: analysis providers enforce per-minute request limits, and
-    // firing every holding at once trips them, silently degrading the whole cycle.
-    const ANALYSIS_CONCURRENCY = 2;
+    // All holdings are analysed in a single batched request (chunked only for large
+    // portfolios). Reasoning is billed per request and free tiers cap requests per day,
+    // so one call for the whole portfolio is dramatically cheaper than one per holding.
     const entityEntries = Array.from(evidenceByEntity.entries());
-    const analysisResults: Array<{ entityId: string; analyses: any[]; evidenceCount: number }> = [];
+    const analysisInputs = await Promise.all(
+      entityEntries.map(async ([entityId, evidenceList]) => {
+        const canonical = resolveCanonicalEntity(entityId);
+        const kState = await getEntityKnowledgeState(canonical.id);
+        return {
+          entityId,
+          entityName: canonical.canonicalName,
+          entityTicker: canonical.primaryTicker,
+          evidence: evidenceList,
+          priorStateSummary: kState.currentBeliefs.statusSummary,
+          monitoringQuestions: kState.currentBeliefs.monitoringQuestions,
+        };
+      })
+    );
 
-    for (let i = 0; i < entityEntries.length; i += ANALYSIS_CONCURRENCY) {
-      const batch = entityEntries.slice(i, i + ANALYSIS_CONCURRENCY);
-      const batchResults = await Promise.all(
-        batch.map(async ([entityId, evidenceList]) => {
-          const canonical = resolveCanonicalEntity(entityId);
-          const kState = await getEntityKnowledgeState(canonical.id);
-          const analyses = await analyzeEvidenceForEntity({
-            entityName: canonical.canonicalName,
-            entityTicker: canonical.primaryTicker,
-            domain: profile.primaryDomain,
-            evidence: evidenceList,
-            priorStateSummary: kState.currentBeliefs.statusSummary,
-            monitoringQuestions: kState.currentBeliefs.monitoringQuestions,
-          });
-          return { entityId, analyses, evidenceCount: evidenceList.length };
-        })
-      );
-      analysisResults.push(...batchResults);
-    }
+    const analysisMap = await analyzePortfolioEvidence({
+      domain: profile.primaryDomain,
+      entities: analysisInputs,
+      preferredModel: params.preferredModel,
+    });
+
+    const analysisResults = entityEntries.map(([entityId, evidenceList]) => ({
+      entityId,
+      analyses: analysisMap.get(entityId) ?? [],
+      evidenceCount: evidenceList.length,
+    }));
 
     for (const { entityId, analyses, evidenceCount } of analysisResults) {
       const canonical = resolveCanonicalEntity(entityId);

@@ -13,12 +13,60 @@
 export type ModelTier = 'quality' | 'fast';
 
 /**
- * Preference chains, best first. Pro tiers are attempted first so a paid key gets the
- * strongest reasoning available, but a free-tier key transparently settles on flash.
+ * Models the user can pick in Settings. Ordered cheapest/highest-throughput first, because
+ * the default posture is to stay comfortably inside the provider's free tier.
+ * Rate limits are the published free-tier allowances and are shown in the UI.
+ */
+export interface SelectableModel {
+  id: string;
+  label: string;
+  note: string;
+  freeTier: boolean;
+}
+
+export const SELECTABLE_MODELS: SelectableModel[] = [
+  {
+    id: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash Lite',
+    note: 'Free · 15 RPM · 250K TPM · 500/day — best free-tier throughput (recommended)',
+    freeTier: true,
+  },
+  {
+    id: 'gemini-2.5-flash-lite',
+    label: 'Gemini 2.5 Flash Lite',
+    note: 'Free · high throughput · slightly older generation',
+    freeTier: true,
+  },
+  {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    note: 'Free · stronger reasoning · much lower daily limit (~20/day)',
+    freeTier: true,
+  },
+  {
+    id: 'gemini-3.5-flash',
+    label: 'Gemini 3.5 Flash',
+    note: 'Free · newer generation flash',
+    freeTier: true,
+  },
+  {
+    id: 'gemini-2.5-pro',
+    label: 'Gemini 2.5 Pro',
+    note: 'Requires billing enabled · deepest analysis',
+    freeTier: false,
+  },
+];
+
+export const DEFAULT_MODEL_ID = 'gemini-3.1-flash-lite';
+
+/**
+ * Fallback chains used when no explicit model is selected, or when the selected one is
+ * unavailable. Free-tier-friendly models come first so the app does not incur spend or
+ * hit `limit: 0` tier walls by default.
  */
 const MODEL_CHAINS: Record<ModelTier, string[]> = {
-  quality: ['gemini-2.5-pro', 'gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-flash-latest'],
-  fast: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'],
+  quality: ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-3.5-flash', 'gemini-2.5-flash'],
+  fast: ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-3.5-flash'],
 };
 
 /** Status codes that mean "this model is unusable for us — try the next one". */
@@ -79,6 +127,8 @@ export interface GeminiCallOptions {
   topP?: number;
   /** Request strict JSON output. Defaults to true — every caller here parses JSON. */
   json?: boolean;
+  /** User-selected model from Settings. Tried first; the tier chain is the fallback. */
+  preferredModel?: string;
 }
 
 export interface GeminiCallResult {
@@ -139,6 +189,22 @@ export async function callGemini(options: GeminiCallOptions): Promise<GeminiCall
   }
 
   const tier = options.tier || 'quality';
+
+  // An explicit user selection takes precedence over the cached/default chain.
+  // Its result is cached under the tier so subsequent calls skip straight to it.
+  const preferred = options.preferredModel;
+  if (preferred && !deadModels.has(preferred) && resolvedModel[tier] !== preferred) {
+    const result = await attemptModel(preferred, options, apiKey);
+    if (result.ok) {
+      resolvedModel[tier] = preferred;
+      lastResolutionError = null;
+      return { ok: true, text: result.text, model: preferred };
+    }
+    if (isPermanentlyUnavailable(result.status, result.error)) {
+      deadModels.add(preferred);
+      console.warn(`[GeminiClient] Selected model "${preferred}" is unavailable to this key — falling back.`);
+    }
+  }
 
   // Fast path: a model already proved itself this process
   const cached = resolvedModel[tier];

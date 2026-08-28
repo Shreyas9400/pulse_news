@@ -99,7 +99,8 @@ export default function HomePage() {
 
     try {
       const storedSettings = localStorage.getItem('pulse_app_settings');
-      if (storedSettings) setSettings(JSON.parse(storedSettings));
+      // Merge over defaults so settings saved before a new option existed still resolve
+      if (storedSettings) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(storedSettings) });
 
       const storedArticles = localStorage.getItem('pulse_saved_articles');
       if (storedArticles) setSavedArticles(JSON.parse(storedArticles));
@@ -249,7 +250,12 @@ export default function HomePage() {
       const res = await fetch('/api/research/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portfolioId: 'user_portfolio', entities: activeList, customQuestions }),
+        body: JSON.stringify({
+          portfolioId: 'user_portfolio',
+          entities: activeList,
+          customQuestions,
+          preferredModel: settings.analysisModel,
+        }),
       });
 
       if (res.ok) {
@@ -282,7 +288,7 @@ export default function HomePage() {
     } finally {
       setIsDeepResearching(false);
     }
-  }, [portfolio, portfolioProfile, customQuestions]);
+  }, [portfolio, portfolioProfile, customQuestions, settings.analysisModel]);
 
   // Auto-run the senior analyst research cycle whenever the mounted portfolio
   // composition actually changes (covers initial default portfolio, then the
@@ -475,6 +481,7 @@ export default function HomePage() {
           crossSynthesisSummary: briefing?.crossEntitySynthesis?.summary
             ? humanizeEntityTokens(briefing.crossEntitySynthesis.summary)
             : undefined,
+          preferredModel: settings.analysisModel,
         }),
       });
 
@@ -487,7 +494,7 @@ export default function HomePage() {
     } finally {
       setIsLoadingDeepDive(false);
     }
-  }, [canonicalEvents, briefing, portfolioProfile, portfolio]);
+  }, [canonicalEvents, briefing, portfolioProfile, portfolio, settings.analysisModel]);
 
   const handleOpenDeepDive = useCallback(() => {
     setIsDeepDiveOpen(true);

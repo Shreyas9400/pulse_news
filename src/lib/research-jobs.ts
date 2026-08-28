@@ -17,7 +17,8 @@ export class ResearchJobs {
   public static async triggerPortfolioResearch(
     portfolioId: string,
     entities: string[],
-    customQuestions?: string[]
+    customQuestions?: string[],
+    preferredModel?: string
   ): Promise<ResearchRunResult> {
     const result = await ResearchControlLoop.executeResearchCycle({
       portfolioId,
@@ -25,6 +26,7 @@ export class ResearchJobs {
       maxDepth: 3,
       maxQueries: 25,
       customQuestions,
+      preferredModel,
     });
 
     ACTIVE_RUNS.set(result.runId, result);
