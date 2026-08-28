@@ -369,7 +369,7 @@ export default function HomePage() {
     setSelectedStockFilter(null);
     setNewsEntityFilter('ALL');
     if (searchQuery.trim()) {
-      fetchNews('all', searchQuery.toUpperCase(), null);
+      fetchNews(activeCategory, searchQuery.toUpperCase(), null);
     } else {
       fetchNews(activeCategory, '', null);
     }

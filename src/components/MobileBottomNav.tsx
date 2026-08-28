@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { CategoryId } from '@/lib/types';
-import { Wallet, Newspaper, LayoutGrid, Bookmark, Bell } from 'lucide-react';
+import { Wallet, Newspaper, Bookmark, Bell } from 'lucide-react';
 
 interface MobileBottomNavProps {
   activeCategory: CategoryId;
@@ -28,16 +28,7 @@ export default function MobileBottomNav({
         <span>Portfolio</span>
       </button>
 
-      {/* 2. Top Headlines */}
-      <button
-        onClick={() => onSelectCategory('all')}
-        className={`mobile-nav-item ${activeCategory === 'all' ? 'active' : ''}`}
-      >
-        <LayoutGrid size={20} />
-        <span>Headlines</span>
-      </button>
-
-      {/* 3. Portfolio News Wire */}
+      {/* 2. Portfolio News Wire */}
       <button
         onClick={() => onSelectCategory('portfolio')}
         className={`mobile-nav-item ${activeCategory === 'portfolio' ? 'active' : ''}`}

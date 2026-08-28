@@ -97,7 +97,6 @@ export interface QuietEntityReport {
 export type CategoryId =
   | 'brief'
   | 'portfolio'
-  | 'all'
   | 'markets'
   | 'saved';
 

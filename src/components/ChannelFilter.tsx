@@ -3,7 +3,7 @@
 import React from 'react';
 import { CategoryId } from '@/lib/types';
 import { getTickerMeta } from '@/lib/stock-aliases';
-import { Bookmark, Newspaper, Wallet, BarChart3 } from 'lucide-react';
+import { Bookmark, Newspaper, Wallet } from 'lucide-react';
 
 interface ChannelFilterProps {
   activeCategory: CategoryId;
@@ -18,7 +18,6 @@ interface ChannelFilterProps {
 const CATEGORIES: { id: CategoryId; label: string; icon: any; isFeatured?: boolean }[] = [
   { id: 'brief', label: 'Portfolio', icon: Wallet, isFeatured: true },
   { id: 'portfolio', label: 'Portfolio News', icon: Newspaper },
-  { id: 'all', label: 'Headlines', icon: BarChart3 },
   { id: 'saved', label: 'Saved', icon: Bookmark },
 ];
 
